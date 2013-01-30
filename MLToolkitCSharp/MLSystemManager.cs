@@ -72,14 +72,18 @@ namespace MLToolkitCSharp
             data.loadArff(fileName);
             if (normalize)
             {
-                Console.WriteLine();
-                Console.WriteLine("Dataset name: " + fileName);
-                Console.WriteLine("Number of instances: " + data.rows());
-                Console.WriteLine("Number of attributes: " + data.cols());
-                Console.WriteLine("Learning algorithm: " + learnerName);
-                Console.WriteLine("Evaluation method: " + evalMethod);
-                Console.WriteLine();
+                Console.WriteLine("Using normalized data\n");
+                data.normalize();
             }
+
+            // Print some stats
+            Console.WriteLine();
+            Console.WriteLine("Dataset name: " + fileName);
+            Console.WriteLine("Number of instances: " + data.rows());
+            Console.WriteLine("Number of attributes: " + data.cols());
+            Console.WriteLine("Learning algorithm: " + learnerName);
+            Console.WriteLine("Evaluation method: " + evalMethod);
+            Console.WriteLine();
 
             if (evalMethod.Equals("training", StringComparison.OrdinalIgnoreCase))
             {
