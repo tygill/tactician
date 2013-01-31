@@ -24,22 +24,22 @@ namespace MLToolkitCSharp
             {
                 return new BaselineLearner();
             }
-            /*
             else if (model.Equals("perceptron", StringComparison.OrdinalIgnoreCase))
             {
                 return new Perceptron(rand);
             }
+            /*
             else if (model.Equals("neuralnet", StringComparison.OrdinalIgnoreCase))
             {
                 return new NeuralNet(rand);
             }
             else if (model.Equals("decisiontree", StringComparison.OrdinalIgnoreCase))
             {
-                return new DecisionTree(rand);
+                return new DecisionTree();
             }
             else if (model.Equals("knn", StringComparison.OrdinalIgnoreCase))
             {
-                return new InstanceBasedLearner(rand);
+                return new InstanceBasedLearner();
             }
             */
             else
@@ -271,7 +271,7 @@ namespace MLToolkitCSharp
                     }
 
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     Console.WriteLine("Usage:");
                     Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E [evaluationMethod] {[extraParamters]} [OPTIONS]\n");
