@@ -26,7 +26,7 @@ namespace MLToolkitCSharp
             }
             else if (model.Equals("perceptron", StringComparison.OrdinalIgnoreCase))
             {
-                return new Perceptron(rand);
+                return new PerceptronLearner(rand);
             }
             /*
             else if (model.Equals("neuralnet", StringComparison.OrdinalIgnoreCase))
