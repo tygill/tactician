@@ -273,34 +273,27 @@ namespace MLToolkitCSharp
                 }
                 catch (Exception)
                 {
-                    Console.WriteLine("Usage:");
-                    Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E [evaluationMethod] {[extraParamters]} [OPTIONS]\n");
-                    Console.WriteLine("OPTIONS:");
-                    Console.WriteLine("-V Print the confusion matrix and learner accuracy on individual class values\n");
-
-                    Console.WriteLine("Possible evaluation methods are:");
-                    Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E training");
-                    Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E static [testARFF_File]");
-                    Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E random [%_ForTesting]");
-                    Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E cross [numOfFolds]\n");
-                    Environment.Exit(0);
+                    printUsageAndExit();
                 }
 
                 if (ARFF == null || Learner == null || Evaluation == null)
-                {
-                    Console.WriteLine("Usage:");
-                    Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E [evaluationMethod] {[extraParamters]} [OPTIONS]\n");
-                    Console.WriteLine("OPTIONS:");
-                    Console.WriteLine("-V Print the confusion matrix and learner accuracy on individual class values");
-                    Console.WriteLine("-N Use normalized data");
-                    Console.WriteLine();
-                    Console.WriteLine("Possible evaluation methods are:");
-                    Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E training");
-                    Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E static [testARFF_File]");
-                    Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E random [%_ForTesting]");
-                    Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E cross [numOfFolds]\n");
-                    Environment.Exit(0);
-                }
+                    printUsageAndExit();
+            }
+
+            private void printUsageAndExit()
+            {
+                Console.WriteLine("Usage:");
+                Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E [evaluationMethod] {[extraParamters]} [OPTIONS]\n");
+                Console.WriteLine("OPTIONS:");
+                Console.WriteLine("-V Print the confusion matrix and learner accuracy on individual class values");
+                Console.WriteLine("-N Use normalized data");
+                Console.WriteLine();
+                Console.WriteLine("Possible evaluation methods are:");
+                Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E training");
+                Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E static [testARFF_File]");
+                Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E random [%_ForTesting]");
+                Console.WriteLine("MLSystemManager -L [learningAlgorithm] -A [ARFF_File] -E cross [numOfFolds]\n");
+                Environment.Exit(0);
             }
 
             // C# style properties with getters and setters

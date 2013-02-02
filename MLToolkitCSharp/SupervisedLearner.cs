@@ -51,7 +51,7 @@ namespace MLToolkitCSharp
 			    {
 				    double[] feat = features.row(i);
 				    double[] targ = labels.row(i);
-				    pred[0] = 0.0; // make sure the prediction is not biassed by a previous prediction
+				    pred[0] = 0.0; // make sure the prediction is not biased by a previous prediction
 				    predict(feat, pred);
 				    double delta = targ[0] - pred[0];
 				    sse += (delta * delta);
