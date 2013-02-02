@@ -64,11 +64,6 @@ namespace MLToolkitCSharp
             // Load the ARFF file
             Matrix data = new Matrix();
             data.loadArff(parser.ARFF);
-            if (parser.Normalize)
-            {
-                Console.WriteLine("Using normalized data\n");
-                data.normalize();
-            }
 
             // Print some stats
             Console.WriteLine();
@@ -78,6 +73,12 @@ namespace MLToolkitCSharp
             Console.WriteLine("Learning algorithm: " + parser.Learner);
             Console.WriteLine("Evaluation method: " + parser.Evaluation);
             Console.WriteLine();
+
+            if (parser.Normalize)
+            {
+                Console.WriteLine("Using normalized data");
+                data.normalize();
+            }
 
             if (parser.Evaluation.Equals("training", StringComparison.OrdinalIgnoreCase))
             {
@@ -301,8 +302,15 @@ namespace MLToolkitCSharp
 
         public static void Main(string[] args)
         {
-            MLSystemManager ml = new MLSystemManager();
-            ml.run(args);
+            try
+            {
+                MLSystemManager ml = new MLSystemManager();
+                ml.run(args);
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine("Error: " + e.Message);
+            }
         }
     }
 }
