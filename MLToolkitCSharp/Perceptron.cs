@@ -62,6 +62,19 @@ namespace MLToolkitCSharp
 
         public override void train(Matrix features, Matrix labels)
         {
+            if (features.rows() != labels.rows())
+            {
+                throw (new Exception("Expected the features and labels to have the same number of rows"));
+            }
+            if (labels.cols() != 1)
+            {
+                throw (new Exception("Sorry, this method currently only supports one-dimensional labels"));
+            }
+            if (features.rows() == 0)
+            {
+                throw (new Exception("Expected at least one row"));
+            }
+
             m_perceptron = new Perceptron(m_rand, features.cols());
             int steadyEpochs = 0;
             int epochCount = 0;
@@ -83,6 +96,11 @@ namespace MLToolkitCSharp
 
         public override void predict(double[] features, double[] labels)
         {
+            if (labels.Length != 1)
+            {
+                throw (new Exception("Sorry, this method currently only supports one-dimensional labels"));
+            }
+
             labels[0] = m_perceptron.predict(features);
         }
     }
