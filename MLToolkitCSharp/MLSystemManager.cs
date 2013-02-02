@@ -57,20 +57,14 @@ namespace MLToolkitCSharp
 
             // Parse the command line arguments
             ArgParser parser = new ArgParser(args);
-            string fileName = parser.ARFF; // File specified by the user
-            string learnerName = parser.Learner; // Learning algorithm specified by the user
-            string evalMethod = parser.Evaluation; // Evaluation method specified by the user
-            string evalParameter = parser.EvalParameter; // Evaluation parameters specified by the user
-            bool printConfusionMatrix = parser.Verbose;
-            bool normalize = parser.Normalize;
 
             // Load the model
-            SupervisedLearner learner = getLearner(learnerName, rand);
+            SupervisedLearner learner = getLearner(parser.Learner, rand);
 
             // Load the ARFF file
             Matrix data = new Matrix();
-            data.loadArff(fileName);
-            if (normalize)
+            data.loadArff(parser.ARFF);
+            if (parser.Normalize)
             {
                 Console.WriteLine("Using normalized data\n");
                 data.normalize();
@@ -78,14 +72,14 @@ namespace MLToolkitCSharp
 
             // Print some stats
             Console.WriteLine();
-            Console.WriteLine("Dataset name: " + fileName);
+            Console.WriteLine("Dataset name: " + parser.ARFF);
             Console.WriteLine("Number of instances: " + data.rows());
             Console.WriteLine("Number of attributes: " + data.cols());
-            Console.WriteLine("Learning algorithm: " + learnerName);
-            Console.WriteLine("Evaluation method: " + evalMethod);
+            Console.WriteLine("Learning algorithm: " + parser.Learner);
+            Console.WriteLine("Evaluation method: " + parser.Evaluation);
             Console.WriteLine();
 
-            if (evalMethod.Equals("training", StringComparison.OrdinalIgnoreCase))
+            if (parser.Evaluation.Equals("training", StringComparison.OrdinalIgnoreCase))
             {
                 Console.WriteLine("Calculating accuracy on training set...");
                 Matrix features = new Matrix(data, 0, 0, data.rows(), data.cols() - 1);
@@ -98,24 +92,24 @@ namespace MLToolkitCSharp
                 Console.WriteLine("Time to train (in seconds): " + stopwatch.Elapsed.TotalSeconds);
                 double accuracy = learner.measureAccuracy(features, labels, confusion);
                 Console.WriteLine("Training set accuracy: " + accuracy);
-                if (printConfusionMatrix)
+                if (parser.Verbose)
                 {
                     Console.WriteLine("\nConfusion matrix: (Row=target value, Col=predicted value)");
                     confusion.print();
                     Console.WriteLine("\n");
                 }
             }
-            else if (evalMethod.Equals("static", StringComparison.OrdinalIgnoreCase))
+            else if (parser.Evaluation.Equals("static", StringComparison.OrdinalIgnoreCase))
             {
                 Matrix testData = new Matrix();
-                testData.loadArff(evalParameter);
-                if (normalize)
+                testData.loadArff(parser.EvalParameter);
+                if (parser.Normalize)
                 {
                     testData.normalize(); // BUG! This may normalize differently from the training data. It should use the same ranges for normalization!
                 }
 
                 Console.WriteLine("Calculating accuracy on separate test set...");
-                Console.WriteLine("Test set name: " + evalParameter);
+                Console.WriteLine("Test set name: " + parser.EvalParameter);
                 Console.WriteLine("Number of test instances: " + testData.rows());
                 Matrix features = new Matrix(data, 0, 0, data.rows(), data.cols() - 1);
                 Matrix labels = new Matrix(data, 0, data.cols() - 1, data.rows(), 1);
@@ -131,21 +125,21 @@ namespace MLToolkitCSharp
                 Matrix confusion = new Matrix();
                 double testAccuracy = learner.measureAccuracy(testFeatures, testLabels, confusion);
                 Console.WriteLine("Test set accuracy: " + testAccuracy);
-                if (printConfusionMatrix)
+                if (parser.Verbose)
                 {
                     Console.WriteLine("\nConfusion matrix: (Row=target value, Col=predicted value)");
                     confusion.print();
                     Console.WriteLine("\n");
                 }
             }
-            else if (evalMethod.Equals("random", StringComparison.OrdinalIgnoreCase))
+            else if (parser.Evaluation.Equals("random", StringComparison.OrdinalIgnoreCase))
             {
                 Console.WriteLine("Calculating accuracy on a random hold-out set...");
-                double trainPercent = 1 - double.Parse(evalParameter);
+                double trainPercent = 1 - double.Parse(parser.EvalParameter);
                 if (trainPercent < 0 || trainPercent > 1)
                     throw new Exception("Percentage for random evaluation must be between 0 and 1");
                 Console.WriteLine("Percentage used for training: " + trainPercent);
-                Console.WriteLine("Percentage used for testing: " + double.Parse(evalParameter));
+                Console.WriteLine("Percentage used for testing: " + double.Parse(parser.EvalParameter));
                 data.shuffle(rand);
                 int trainSize = (int)(trainPercent * data.rows());
                 Matrix trainFeatures = new Matrix(data, 0, 0, trainSize, data.cols() - 1);
@@ -162,17 +156,17 @@ namespace MLToolkitCSharp
                 Matrix confusion = new Matrix();
                 double testAccuracy = learner.measureAccuracy(testFeatures, testLabels, confusion);
                 Console.WriteLine("Test set accuracy: " + testAccuracy);
-                if (printConfusionMatrix)
+                if (parser.Verbose)
                 {
                     Console.WriteLine("\nConfusion matrix: (Row=target value, Col=predicted value)");
                     confusion.print();
                     Console.WriteLine("\n");
                 }
             }
-            else if (evalMethod.Equals("cross", StringComparison.OrdinalIgnoreCase))
+            else if (parser.Evaluation.Equals("cross", StringComparison.OrdinalIgnoreCase))
             {
                 Console.WriteLine("Calculating accuracy using cross-validation...");
-                int folds = int.Parse(evalParameter);
+                int folds = int.Parse(parser.EvalParameter);
                 if (folds <= 0)
                     throw new Exception("Number of folds must be greater than 0");
                 Console.WriteLine("Number of folds: " + folds);
