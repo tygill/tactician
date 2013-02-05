@@ -48,6 +48,13 @@ namespace MLToolkitCSharp
             netValue += m_weights[inputs.Length];
             return netValue;
         }
+
+        public void print(System.IO.StreamWriter outFile)
+        {
+            outFile.WriteLine("# Final Weight Vector: " + m_weights[0] + " " + m_weights[1] + " " + m_weights[2]);
+            outFile.WriteLine("plot " + (m_weights[0] / -m_weights[1]) + " * x + "
+                + (m_weights[2] / -m_weights[1]) + " linecolor rgb \"blue\"");
+        }
     }
 
     class PerceptronLearner : SupervisedLearner
@@ -55,11 +62,13 @@ namespace MLToolkitCSharp
         private Perceptron m_perceptron;
         private Random m_rand;
         private double m_learningRate;
+        private System.IO.StreamWriter m_outFile;
 
-        public PerceptronLearner(double learningRate, Random rand)
+        public PerceptronLearner(double learningRate, Random rand, System.IO.StreamWriter outFile)
         {
             m_rand = rand;
             m_learningRate = learningRate;
+            m_outFile = outFile;
         }
 
         public override void train(Matrix features, Matrix labels)
@@ -94,6 +103,26 @@ namespace MLToolkitCSharp
                 accuracy = newAccuracy;
             }
             Console.WriteLine("Training took " + epochCount + " epochs.");
+
+            if (m_outFile != null)
+            {
+                m_outFile.WriteLine("set xrange[" + features.columnMin(0) + ": "
+                    + features.columnMax(0) + "]");
+                m_outFile.WriteLine("set yrange[" + features.columnMin(1) + ": "
+                    + features.columnMax(1) + "]");
+                m_outFile.WriteLine("unset key\nset size square\nset multiplot");
+                m_perceptron.print(m_outFile);
+                for (int i = 0; i < features.rows(); ++i)
+                {
+                    if (labels.get(i, 0) == 1)
+                        m_outFile.WriteLine("plot '-' with points pt 5 lc rgb \"dark-green\"");
+                    else
+                        m_outFile.WriteLine("plot '-' with points pt 5 lc rgb \"red\"");
+
+                    m_outFile.WriteLine(features.get(i, 0) + " " + features.get(i, 1));
+                    m_outFile.WriteLine("e");
+                }
+            }
         }
 
         public override void predict(double[] features, double[] labels)

@@ -18,7 +18,7 @@ namespace MLToolkitCSharp
         /**
          *  When you make a new learning algorithm, you should add a line for it to this method.
          */
-        public SupervisedLearner getLearner(string model, double learningRate, Random rand)
+        public SupervisedLearner getLearner(string model, double learningRate, Random rand, System.IO.StreamWriter outFile)
         {
             if (model.Equals("baseline", StringComparison.OrdinalIgnoreCase))
             {
@@ -26,7 +26,7 @@ namespace MLToolkitCSharp
             }
             else if (model.Equals("perceptron", StringComparison.OrdinalIgnoreCase))
             {
-                return new PerceptronLearner(learningRate, rand);
+                return new PerceptronLearner(learningRate, rand, outFile);
             }
             /*
             else if (model.Equals("neuralnet", StringComparison.OrdinalIgnoreCase))
@@ -58,8 +58,12 @@ namespace MLToolkitCSharp
             // Parse the command line arguments
             ArgParser parser = new ArgParser(args);
 
+            System.IO.StreamWriter outFile = null;
+            if (parser.OutFile != null)
+                outFile = new System.IO.StreamWriter(parser.OutFile);
+
             // Load the model
-            SupervisedLearner learner = getLearner(parser.Learner, parser.LearningRate, rand);
+            SupervisedLearner learner = getLearner(parser.Learner, parser.LearningRate, rand, outFile);
 
             // Load the ARFF file
             Matrix data = new Matrix();
@@ -74,6 +78,8 @@ namespace MLToolkitCSharp
             if (parser.Learner.Equals("perceptron"))
                 Console.WriteLine("Learning Rate: " + parser.LearningRate);
             Console.WriteLine("Evaluation method: " + parser.Evaluation);
+            if (parser.OutFile != null)
+                Console.WriteLine("Output File: " + parser.OutFile);
             Console.WriteLine();
 
             if (parser.Normalize)
@@ -203,6 +209,11 @@ namespace MLToolkitCSharp
                 Console.WriteLine("Average time to train (in seconds): " + elapsedTime);
                 Console.WriteLine("Mean accuracy=" + (sumAccuracy / (reps * folds)));
             }
+
+            if (outFile != null)
+            {
+                outFile.Dispose();
+            }
         }
 
         /**
@@ -264,6 +275,10 @@ namespace MLToolkitCSharp
                                 Environment.Exit(0);
                             }
                         }
+                        else if (argv[i].Equals("-O"))
+                        {
+                            OutFile = argv[++i];
+                        }
                         else
                         {
                             Console.WriteLine("Invalid parameter: " + argv[i]);
@@ -305,6 +320,7 @@ namespace MLToolkitCSharp
             public string EvalParameter { private set; get; }
             public bool Verbose { private set; get; }
             public bool Normalize { private set; get; }
+            public string OutFile { private set; get; }
         }
 
         public static void Main(string[] args)
