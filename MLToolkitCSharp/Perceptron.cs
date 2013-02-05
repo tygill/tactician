@@ -54,10 +54,12 @@ namespace MLToolkitCSharp
     {
         private Perceptron m_perceptron;
         private Random m_rand;
+        private double m_learningRate;
 
-        public PerceptronLearner(Random rand)
+        public PerceptronLearner(double learningRate, Random rand)
         {
             m_rand = rand;
+            m_learningRate = learningRate;
         }
 
         public override void train(Matrix features, Matrix labels)
@@ -75,7 +77,7 @@ namespace MLToolkitCSharp
                 throw (new Exception("Expected at least one row"));
             }
 
-            m_perceptron = new Perceptron(m_rand, features.cols());
+            m_perceptron = new Perceptron(m_rand, features.cols(), m_learningRate);
             int steadyEpochs = 0;
             int epochCount = 0;
             double accuracy = measureAccuracy(features, labels, new Matrix());

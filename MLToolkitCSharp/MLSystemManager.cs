@@ -18,7 +18,7 @@ namespace MLToolkitCSharp
         /**
          *  When you make a new learning algorithm, you should add a line for it to this method.
          */
-        public SupervisedLearner getLearner(string model, Random rand)
+        public SupervisedLearner getLearner(string model, double learningRate, Random rand)
         {
             if (model.Equals("baseline", StringComparison.OrdinalIgnoreCase))
             {
@@ -26,7 +26,7 @@ namespace MLToolkitCSharp
             }
             else if (model.Equals("perceptron", StringComparison.OrdinalIgnoreCase))
             {
-                return new PerceptronLearner(rand);
+                return new PerceptronLearner(learningRate, rand);
             }
             /*
             else if (model.Equals("neuralnet", StringComparison.OrdinalIgnoreCase))
@@ -59,7 +59,7 @@ namespace MLToolkitCSharp
             ArgParser parser = new ArgParser(args);
 
             // Load the model
-            SupervisedLearner learner = getLearner(parser.Learner, rand);
+            SupervisedLearner learner = getLearner(parser.Learner, parser.LearningRate, rand);
 
             // Load the ARFF file
             Matrix data = new Matrix();
@@ -71,6 +71,8 @@ namespace MLToolkitCSharp
             Console.WriteLine("Number of instances: " + data.rows());
             Console.WriteLine("Number of attributes: " + data.cols());
             Console.WriteLine("Learning algorithm: " + parser.Learner);
+            if (parser.Learner.Equals("perceptron"))
+                Console.WriteLine("Learning Rate: " + parser.LearningRate);
             Console.WriteLine("Evaluation method: " + parser.Evaluation);
             Console.WriteLine();
 
@@ -232,6 +234,10 @@ namespace MLToolkitCSharp
                         else if (argv[i].Equals("-L"))
                         {
                             Learner = argv[++i];
+                            if (Learner.Equals("perceptron"))
+                            {
+                                LearningRate = double.Parse(argv[++i]);
+                            }
                         }
                         else if (argv[i].Equals("-E"))
                         {
@@ -294,6 +300,7 @@ namespace MLToolkitCSharp
             // C# style properties with getters and setters
             public string ARFF { private set; get; }
             public string Learner { private set; get; }
+            public double LearningRate { private set; get; }
             public string Evaluation { private set; get; }
             public string EvalParameter { private set; get; }
             public bool Verbose { private set; get; }
