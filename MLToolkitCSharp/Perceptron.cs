@@ -87,13 +87,23 @@ namespace MLToolkitCSharp
             }
 
             m_perceptron = new Perceptron(m_rand, features.cols(), m_learningRate);
+
+            Matrix order = new Matrix();
+            order.setSize(features.rows(), 1);
+            for (int i = 0; i < order.rows(); ++i)
+                order.set(i, 0, i);
+
             int steadyEpochs = 0;
             int epochCount = 0;
             double accuracy = measureAccuracy(features, labels, new Matrix());
             while (steadyEpochs < 10)
             {
-                for (int i = 0; i < features.rows(); ++i)
-                    m_perceptron.train(features.row(i), labels.get(i, 0));
+                order.shuffle(m_rand);
+                for (int i = 0; i < order.rows(); ++i)
+                {
+                    int rowToUse = (int)order.get(i, 0);
+                    m_perceptron.train(features.row(rowToUse), labels.get(rowToUse, 0));
+                }
                 epochCount++;
                 double newAccuracy = measureAccuracy(features, labels, new Matrix());
                 if (newAccuracy <= accuracy)
