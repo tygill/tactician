@@ -52,11 +52,15 @@ namespace MLToolkitCSharp
         {
             //args = new string[] { "-L", "baseline", "-A", "iris.arff", "-E", "cross", "10", "-N" };
 
-            //Random rand = new Random(1234); // Use a seed for deterministic results (makes debugging easier)
-            Random rand = new Random(); // No seed for non-deterministic results
-
             // Parse the command line arguments
             ArgParser parser = new ArgParser(args);
+
+            Random rand = new Random(); // No seed for non-deterministic results
+            if (parser.HasRandSeed)
+            {
+                rand = new Random(parser.RandSeed); // Use a seed for deterministic results (makes debugging easier)
+            }
+
 
             System.IO.StreamWriter outFile = null;
             if (parser.OutFile != null)
@@ -279,6 +283,11 @@ namespace MLToolkitCSharp
                         {
                             OutFile = argv[++i];
                         }
+                        else if (argv[i].Equals("-R"))
+                        {
+                            HasRandSeed = true;
+                            RandSeed = int.Parse(argv[++i]);
+                        }
                         else
                         {
                             Console.WriteLine("Invalid parameter: " + argv[i]);
@@ -321,6 +330,8 @@ namespace MLToolkitCSharp
             public bool Verbose { private set; get; }
             public bool Normalize { private set; get; }
             public string OutFile { private set; get; }
+            public int RandSeed { private set; get; }
+            public bool HasRandSeed { private set; get; }
         }
 
         public static void Main(string[] args)
