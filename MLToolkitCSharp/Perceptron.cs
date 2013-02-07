@@ -7,15 +7,15 @@ namespace MLToolkitCSharp
 {
     class Perceptron
     {
-        private double[] m_weights;
+        public double[] Weights { private set; get; }
         private double m_learningRate;
 
-        public Perceptron(Random rand, int numInputs, double learningRate = 0.1)
+        public Perceptron(Random rand, int numInputs, double learningRate)
         {
-            m_weights = new double[numInputs + 1];
+            Weights = new double[numInputs + 1];
             // Random starting weights between -.5 and .5
-            for (int i = 0; i < m_weights.Length; ++i)
-                m_weights[i] = rand.NextDouble() - 0.5;
+            for (int i = 0; i < Weights.Length; ++i)
+                Weights[i] = rand.NextDouble() - 0.5;
             m_learningRate = learningRate;
         }
 
@@ -24,8 +24,8 @@ namespace MLToolkitCSharp
             double output = predict(inputs);
             double weightUpdateFactor = m_learningRate * (target - output);
             for (int i = 0; i < inputs.Length; ++i)
-                m_weights[i] += weightUpdateFactor * inputs[i];
-            m_weights[inputs.Length] += weightUpdateFactor;
+                Weights[i] += weightUpdateFactor * inputs[i];
+            Weights[inputs.Length] += weightUpdateFactor;
         }
 
         public double predict(double[] inputs)
@@ -44,16 +44,9 @@ namespace MLToolkitCSharp
         {
             double netValue = 0;
             for (int i = 0; i < inputs.Length; ++i)
-                netValue += inputs[i] * m_weights[i];
-            netValue += m_weights[inputs.Length];
+                netValue += inputs[i] * Weights[i];
+            netValue += Weights[inputs.Length];
             return netValue;
-        }
-
-        public void print(System.IO.StreamWriter outFile)
-        {
-            outFile.WriteLine("# Final Weight Vector: " + m_weights[0] + " " + m_weights[1] + " " + m_weights[2]);
-            outFile.WriteLine("plot " + (m_weights[0] / -m_weights[1]) + " * x + "
-                + (m_weights[2] / -m_weights[1]) + " linecolor rgb \"blue\"");
         }
     }
 
@@ -93,6 +86,13 @@ namespace MLToolkitCSharp
             for (int i = 0; i < order.rows(); ++i)
                 order.set(i, 0, i);
 
+            m_outFile.WriteLine("set term wxt 0\nunset key");
+            m_outFile.WriteLine("set yrange [0: 1]");
+            m_outFile.WriteLine("set title \"Misclassification Rate vs. Epochs\"");
+            m_outFile.WriteLine("set xlabel \"Epochs Completed\"");
+            m_outFile.WriteLine("set ylabel \"Misclassification Rate\"");
+            m_outFile.WriteLine("plot '-' with line lt 3");
+
             int steadyEpochs = 0;
             int epochCount = 0;
             double accuracy = measureAccuracy(features, labels, new Matrix());
@@ -106,22 +106,38 @@ namespace MLToolkitCSharp
                 }
                 epochCount++;
                 double newAccuracy = measureAccuracy(features, labels, new Matrix());
-                if (newAccuracy <= accuracy)
+                if (newAccuracy - accuracy < 0.1)
                     steadyEpochs++;
                 else
                     steadyEpochs = 0;
+                if (m_outFile != null)
+                {
+                    m_outFile.WriteLine((epochCount - 1) + ", " + (1 - accuracy)
+                        + " " + epochCount + ", " + (1 - newAccuracy));
+                }
                 accuracy = newAccuracy;
             }
             Console.WriteLine("Training took " + epochCount + " epochs.");
+            Console.WriteLine("Final Weights:");
+            for (int i = 0; i < features.cols(); ++i)
+                Console.WriteLine(features.attrName(i) + " - " + m_perceptron.Weights[i]);
+            Console.WriteLine("Bias Weight - " + m_perceptron.Weights[features.cols()]);
 
             if (m_outFile != null)
             {
+                m_outFile.WriteLine("e\nset term wxt 1");
                 m_outFile.WriteLine("set xrange[" + features.columnMin(0) + ": "
                     + features.columnMax(0) + "]");
                 m_outFile.WriteLine("set yrange[" + features.columnMin(1) + ": "
                     + features.columnMax(1) + "]");
+                m_outFile.WriteLine("set xlabel \"" + features.attrName(0) + "\"");
+                m_outFile.WriteLine("set ylabel \"" + features.attrName(1) + "\"");
                 m_outFile.WriteLine("unset key\nset size square\nset multiplot");
-                m_perceptron.print(m_outFile);
+                m_outFile.WriteLine("set title \"Instances and Decision Line\"");
+                m_outFile.WriteLine("# Final Weight Vector: " + m_perceptron.Weights[0] + " " + m_perceptron.Weights[1]
+                    + " " + m_perceptron.Weights[2]);
+                m_outFile.WriteLine("plot " + (m_perceptron.Weights[0] / -m_perceptron.Weights[1]) + " * x + "
+                    + (m_perceptron.Weights[2] / -m_perceptron.Weights[1]) + " linecolor rgb \"blue\"");
                 for (int i = 0; i < features.rows(); ++i)
                 {
                     if (labels.get(i, 0) == 1)
@@ -132,6 +148,7 @@ namespace MLToolkitCSharp
                     m_outFile.WriteLine(features.get(i, 0) + " " + features.get(i, 1));
                     m_outFile.WriteLine("e");
                 }
+                m_outFile.WriteLine("unset multiplot");
             }
         }
 
