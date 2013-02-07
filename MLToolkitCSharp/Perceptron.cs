@@ -52,7 +52,7 @@ namespace MLToolkitCSharp
 
     class PerceptronLearner : SupervisedLearner
     {
-        private Perceptron m_perceptron;
+        private Perceptron[] m_perceptrons;
         private Random m_rand;
         private double m_learningRate;
         private System.IO.StreamWriter m_outFile;
@@ -79,10 +79,23 @@ namespace MLToolkitCSharp
                 throw (new Exception("Expected at least one row"));
             }
 
-            bool plotMisclassificationRate = labels.valueCount(0) != 0;
-            bool plotDecisionLineWithInstances = labels.valueCount(0) == 2 && features.cols() == 2;
+            int numOutputClasses = labels.valueCount(0);
 
-            m_perceptron = new Perceptron(m_rand, features.cols(), m_learningRate);
+            bool plotMisclassificationRate = numOutputClasses != 0;
+            bool plotDecisionLineWithInstances = numOutputClasses == 2 && features.cols() == 2;
+
+            if (numOutputClasses > 2)
+            {
+                // Create one perceptron for each output class.
+                m_perceptrons = new Perceptron[numOutputClasses];
+                for (int i = 0; i < numOutputClasses; ++i)
+                    m_perceptrons[i] = new Perceptron(m_rand, features.cols(), m_learningRate);
+            }
+            else
+            {
+                m_perceptrons = new Perceptron[1];
+                m_perceptrons[0] = new Perceptron(m_rand, features.cols(), m_learningRate);
+            }
 
             Matrix order = new Matrix();
             order.setSize(features.rows(), 1);
@@ -108,7 +121,18 @@ namespace MLToolkitCSharp
                 for (int i = 0; i < order.rows(); ++i)
                 {
                     int rowToUse = (int)order.get(i, 0);
-                    m_perceptron.train(features.row(rowToUse), labels.get(rowToUse, 0));
+                    for (int j = 0; j < m_perceptrons.Length; ++j)
+                    {
+                        double targetValue = labels.get(rowToUse, 0);
+                        if (m_perceptrons.Length > 1)
+                        {
+                            if ((int)targetValue == j)
+                                targetValue = 1;
+                            else
+                                targetValue = 0;
+                        }
+                        m_perceptrons[j].train(features.row(rowToUse), targetValue);
+                    }
                 }
                 epochCount++;
                 double newAccuracy = measureAccuracy(features, labels, new Matrix());
@@ -124,10 +148,13 @@ namespace MLToolkitCSharp
                 accuracy = newAccuracy;
             }
             Console.WriteLine("Training took " + epochCount + " epochs.");
-            Console.WriteLine("Final Weights:");
-            for (int i = 0; i < features.cols(); ++i)
-                Console.WriteLine(features.attrName(i) + " - " + m_perceptron.Weights[i]);
-            Console.WriteLine("Bias Weight - " + m_perceptron.Weights[features.cols()]);
+            for (int j = 0; j < m_perceptrons.Length; ++j)
+            {
+                Console.WriteLine("\nFinal Weights (Perceptron " + j + "):");
+                for (int i = 0; i < features.cols(); ++i)
+                    Console.WriteLine("\t" + features.attrName(i) + ": " + m_perceptrons[j].Weights[i]);
+                Console.WriteLine("\tBias Weight: " + m_perceptrons[j].Weights[features.cols()]);
+            }
 
             if (m_outFile != null)
             {
@@ -144,10 +171,10 @@ namespace MLToolkitCSharp
                     m_outFile.WriteLine("set ylabel \"" + features.attrName(1) + "\"");
                     m_outFile.WriteLine("unset key\nset size square\nset multiplot");
                     m_outFile.WriteLine("set title \"Instances and Decision Line\"");
-                    m_outFile.WriteLine("# Final Weight Vector: " + m_perceptron.Weights[0] + " " + m_perceptron.Weights[1]
-                        + " " + m_perceptron.Weights[2]);
-                    m_outFile.WriteLine("plot " + (m_perceptron.Weights[0] / -m_perceptron.Weights[1]) + " * x + "
-                        + (m_perceptron.Weights[2] / -m_perceptron.Weights[1]) + " linecolor rgb \"blue\"");
+                    m_outFile.WriteLine("# Final Weight Vector: " + m_perceptrons[0].Weights[0] + " " + m_perceptrons[0].Weights[1]
+                        + " " + m_perceptrons[0].Weights[2]);
+                    m_outFile.WriteLine("plot " + (m_perceptrons[0].Weights[0] / -m_perceptrons[0].Weights[1]) + " * x + "
+                        + (m_perceptrons[0].Weights[2] / -m_perceptrons[0].Weights[1]) + " linecolor rgb \"blue\"");
                     for (int i = 0; i < features.rows(); ++i)
                     {
                         if (labels.get(i, 0) == 1)
@@ -170,7 +197,46 @@ namespace MLToolkitCSharp
                 throw (new Exception("Sorry, this method currently only supports one-dimensional labels"));
             }
 
-            labels[0] = m_perceptron.predict(features);
+            if (m_perceptrons.Length == 1)
+            {
+                labels[0] = m_perceptrons[0].predict(features);
+            }
+            else
+            {
+                int prediction = -1;
+                for (int i = 0; i < m_perceptrons.Length; ++i)
+                {
+                    if ((int)m_perceptrons[i].predict(features) == 1)
+                    {
+                        if (prediction != -1)  // Another perceptron already output high
+                        {
+                            double ourNet = m_perceptrons[i].calculateNet(features);
+                            double theirNet = m_perceptrons[prediction].calculateNet(features);
+                            if (ourNet > theirNet)
+                                prediction = i;
+                        }
+                        else
+                        {
+                            prediction = i;
+                        }
+                    }
+                }
+                if (prediction == -1) // None of the perceptrons output high.
+                {
+                    prediction = 0;
+                    double highestNet = m_perceptrons[0].calculateNet(features);
+                    for (int i = 1; i < m_perceptrons.Length; ++i)
+                    {
+                        double net = m_perceptrons[i].calculateNet(features);
+                        if (net > highestNet)
+                        {
+                            highestNet = net;
+                            prediction = i;
+                        }
+                    }
+                }
+                labels[0] = prediction;
+            }
         }
     }
 }
