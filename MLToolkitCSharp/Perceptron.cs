@@ -79,6 +79,9 @@ namespace MLToolkitCSharp
                 throw (new Exception("Expected at least one row"));
             }
 
+            bool plotMisclassificationRate = labels.valueCount(0) != 0;
+            bool plotDecisionLineWithInstances = labels.valueCount(0) == 2 && features.cols() == 2;
+
             m_perceptron = new Perceptron(m_rand, features.cols(), m_learningRate);
 
             Matrix order = new Matrix();
@@ -86,12 +89,15 @@ namespace MLToolkitCSharp
             for (int i = 0; i < order.rows(); ++i)
                 order.set(i, 0, i);
 
-            m_outFile.WriteLine("set term wxt 0\nunset key");
-            m_outFile.WriteLine("set yrange [0: 1]");
-            m_outFile.WriteLine("set title \"Misclassification Rate vs. Epochs\"");
-            m_outFile.WriteLine("set xlabel \"Epochs Completed\"");
-            m_outFile.WriteLine("set ylabel \"Misclassification Rate\"");
-            m_outFile.WriteLine("plot '-' with line lt 3");
+            if (m_outFile != null && plotMisclassificationRate)
+            {
+                m_outFile.WriteLine("set term wxt 0\nunset key");
+                m_outFile.WriteLine("set yrange [0: 1]");
+                m_outFile.WriteLine("set title \"Misclassification Rate vs. Epochs\"");
+                m_outFile.WriteLine("set xlabel \"Epochs Completed\"");
+                m_outFile.WriteLine("set ylabel \"Misclassification Rate\"");
+                m_outFile.WriteLine("plot '-' with line lt 3");
+            }
 
             int steadyEpochs = 0;
             int epochCount = 0;
@@ -110,7 +116,7 @@ namespace MLToolkitCSharp
                     steadyEpochs++;
                 else
                     steadyEpochs = 0;
-                if (m_outFile != null)
+                if (m_outFile != null && plotMisclassificationRate)
                 {
                     m_outFile.WriteLine((epochCount - 1) + ", " + (1 - accuracy)
                         + " " + epochCount + ", " + (1 - newAccuracy));
@@ -125,30 +131,35 @@ namespace MLToolkitCSharp
 
             if (m_outFile != null)
             {
-                m_outFile.WriteLine("e\nset term wxt 1");
-                m_outFile.WriteLine("set xrange[" + features.columnMin(0) + ": "
-                    + features.columnMax(0) + "]");
-                m_outFile.WriteLine("set yrange[" + features.columnMin(1) + ": "
-                    + features.columnMax(1) + "]");
-                m_outFile.WriteLine("set xlabel \"" + features.attrName(0) + "\"");
-                m_outFile.WriteLine("set ylabel \"" + features.attrName(1) + "\"");
-                m_outFile.WriteLine("unset key\nset size square\nset multiplot");
-                m_outFile.WriteLine("set title \"Instances and Decision Line\"");
-                m_outFile.WriteLine("# Final Weight Vector: " + m_perceptron.Weights[0] + " " + m_perceptron.Weights[1]
-                    + " " + m_perceptron.Weights[2]);
-                m_outFile.WriteLine("plot " + (m_perceptron.Weights[0] / -m_perceptron.Weights[1]) + " * x + "
-                    + (m_perceptron.Weights[2] / -m_perceptron.Weights[1]) + " linecolor rgb \"blue\"");
-                for (int i = 0; i < features.rows(); ++i)
-                {
-                    if (labels.get(i, 0) == 1)
-                        m_outFile.WriteLine("plot '-' with points pt 5 lc rgb \"dark-green\"");
-                    else
-                        m_outFile.WriteLine("plot '-' with points pt 5 lc rgb \"red\"");
-
-                    m_outFile.WriteLine(features.get(i, 0) + " " + features.get(i, 1));
+                if (plotMisclassificationRate)
                     m_outFile.WriteLine("e");
+                if (plotDecisionLineWithInstances)
+                {
+                    m_outFile.WriteLine("set term wxt 1");
+                    m_outFile.WriteLine("set xrange[" + features.columnMin(0) + ": "
+                        + features.columnMax(0) + "]");
+                    m_outFile.WriteLine("set yrange[" + features.columnMin(1) + ": "
+                        + features.columnMax(1) + "]");
+                    m_outFile.WriteLine("set xlabel \"" + features.attrName(0) + "\"");
+                    m_outFile.WriteLine("set ylabel \"" + features.attrName(1) + "\"");
+                    m_outFile.WriteLine("unset key\nset size square\nset multiplot");
+                    m_outFile.WriteLine("set title \"Instances and Decision Line\"");
+                    m_outFile.WriteLine("# Final Weight Vector: " + m_perceptron.Weights[0] + " " + m_perceptron.Weights[1]
+                        + " " + m_perceptron.Weights[2]);
+                    m_outFile.WriteLine("plot " + (m_perceptron.Weights[0] / -m_perceptron.Weights[1]) + " * x + "
+                        + (m_perceptron.Weights[2] / -m_perceptron.Weights[1]) + " linecolor rgb \"blue\"");
+                    for (int i = 0; i < features.rows(); ++i)
+                    {
+                        if (labels.get(i, 0) == 1)
+                            m_outFile.WriteLine("plot '-' with points pt 5 lc rgb \"dark-green\"");
+                        else
+                            m_outFile.WriteLine("plot '-' with points pt 5 lc rgb \"red\"");
+
+                        m_outFile.WriteLine(features.get(i, 0) + " " + features.get(i, 1));
+                        m_outFile.WriteLine("e");
+                    }
+                    m_outFile.WriteLine("unset multiplot");
                 }
-                m_outFile.WriteLine("unset multiplot");
             }
         }
 
