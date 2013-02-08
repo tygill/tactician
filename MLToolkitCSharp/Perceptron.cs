@@ -5,12 +5,12 @@ using System.Text;
 
 namespace MLToolkitCSharp
 {
-    class Perceptron
+    class LinearUnit
     {
         public double[] Weights { private set; get; }
         private double m_learningRate;
 
-        public Perceptron(Random rand, int numInputs, double learningRate)
+        public LinearUnit(Random rand, int numInputs, double learningRate)
         {
             Weights = new double[numInputs + 1];
             // Random starting weights between -.5 and .5
@@ -28,16 +28,9 @@ namespace MLToolkitCSharp
             Weights[inputs.Length] += weightUpdateFactor;
         }
 
-        public double predict(double[] inputs)
+        public virtual double predict(double[] inputs)
         {
-            return threshold(calculateNet(inputs));
-        }
-
-        private double threshold(double netValue)
-        {
-            if (netValue > 0)
-                return 1;
-            return 0;
+            return calculateNet(inputs);
         }
 
         public double calculateNet(double[] inputs)
@@ -47,6 +40,26 @@ namespace MLToolkitCSharp
                 netValue += inputs[i] * Weights[i];
             netValue += Weights[inputs.Length];
             return netValue;
+        }
+    }
+
+    class Perceptron : LinearUnit
+    {
+        public Perceptron(Random rand, int numInputs, double learningRate)
+            : base(rand, numInputs, learningRate)
+        {
+        }
+
+        public override double predict(double[] inputs)
+        {
+            return threshold(calculateNet(inputs));
+        }
+
+        private double threshold(double netValue)
+        {
+            if (netValue > 0)
+                return 1;
+            return 0;
         }
     }
 
