@@ -72,6 +72,8 @@ class isotropic_parser:
         if match:
             self.game.set_game_id(match.group('game_id'))
             self.game.set_winner(match.group('winner'))
+        else:
+            self.unmatched_line(first_line, first_line_regex)
             
         # Get the piles that signalled the end of the game
         empty_piles = self.file.next() # Read the line with the ending conditions
@@ -111,6 +113,8 @@ class isotropic_parser:
                     print '{0} {1} ({2})'.format(count, card, singular_card)
                 self.game.add_player(player)
                 self.game.set_final_score(player, score)
+            else:
+                self.unmatched_line(player_first_line, player_first_line_regex)
                 
             player_second_line = self.file.next() # Read players 2nd line (openning move)
             # This is skipped for now - its not needed
@@ -126,11 +130,18 @@ class isotropic_parser:
                     card = card_match.group('card')
                     singular_card = sanitize_card(card)
                     print '{0} {1} ({2})'.format(count, card, singular_card)
+            else:
+                self.unmatched_line(player_third_line, player_third_line_regex)
                     
             self.file.next() # Read the blank line that follows each player
         
     def read_cards_in_supply(self):
         self.game.init_game()
+        
+        
+        
+    def unmatched_line(self, line, regex):
+        print 'Line didn\'t match:\n Line: {0}\n Pattern: {1}'.format(line, regex.pattern)
     
     
 if __name__ == '__main__':
