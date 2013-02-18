@@ -42,11 +42,14 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BaselineLearner.cs" />
+    <Compile Include="IThresholder.cs" />
+    <Compile Include="LinearUnit.cs" />
     <Compile Include="Matrix.cs" />
     <Compile Include="MLSystemManager.cs" />
     <Compile Include="Perceptron.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SupervisedLearner.cs" />
+    <Compile Include="ThresholdedUnit.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

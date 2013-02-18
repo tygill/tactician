@@ -5,61 +5,29 @@ using System.Text;
 
 namespace MLToolkitCSharp
 {
-    class LinearUnit
+    class PerceptronThresholder : IThresholder
     {
-        public double[] Weights { private set; get; }
-        private double m_learningRate;
+        private double m_high, m_low;
 
-        public LinearUnit(Random rand, int numInputs, double learningRate)
+        public PerceptronThresholder(double high = 1, double low = 0)
         {
-            Weights = new double[numInputs + 1];
-            // Random starting weights between -.5 and .5
-            for (int i = 0; i < Weights.Length; ++i)
-                Weights[i] = rand.NextDouble() - 0.5;
-            m_learningRate = learningRate;
+            m_high = high;
+            m_low = low;
         }
 
-        public void train(double[] inputs, double target)
+        public double thresholdValue(double netValue)
         {
-            double output = predict(inputs);
-            double weightUpdateFactor = m_learningRate * (target - output);
-            for (int i = 0; i < inputs.Length; ++i)
-                Weights[i] += weightUpdateFactor * inputs[i];
-            Weights[inputs.Length] += weightUpdateFactor;
-        }
-
-        public virtual double predict(double[] inputs)
-        {
-            return calculateNet(inputs);
-        }
-
-        public double calculateNet(double[] inputs)
-        {
-            double netValue = 0;
-            for (int i = 0; i < inputs.Length; ++i)
-                netValue += inputs[i] * Weights[i];
-            netValue += Weights[inputs.Length];
-            return netValue;
+            if (netValue > 0)
+                return m_high;
+            return m_low;
         }
     }
 
-    class Perceptron : LinearUnit
+    class Perceptron : ThresholdedUnit
     {
         public Perceptron(Random rand, int numInputs, double learningRate)
-            : base(rand, numInputs, learningRate)
+            : base(rand, numInputs, learningRate, new PerceptronThresholder())
         {
-        }
-
-        public override double predict(double[] inputs)
-        {
-            return threshold(calculateNet(inputs));
-        }
-
-        private double threshold(double netValue)
-        {
-            if (netValue > 0)
-                return 1;
-            return 0;
         }
     }
 
