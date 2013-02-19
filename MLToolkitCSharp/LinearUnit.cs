@@ -19,10 +19,9 @@ namespace MLToolkitCSharp
             m_learningRate = learningRate;
         }
 
-        public void train(double[] inputs, double target)
+        public void updateWeights(double[] inputs, double error)
         {
-            double output = predict(inputs);
-            double weightUpdateFactor = m_learningRate * (target - output);
+            double weightUpdateFactor = m_learningRate * error;
             for (int i = 0; i < inputs.Length; ++i)
                 Weights[i] += weightUpdateFactor * inputs[i];
             Weights[inputs.Length] += weightUpdateFactor;

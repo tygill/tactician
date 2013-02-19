@@ -86,7 +86,9 @@ namespace MLToolkitCSharp
                             else
                                 targetValue = 0;
                         }
-                        m_perceptrons[j].train(features.row(rowToUse), targetValue);
+                        double[] inputs = features.row(rowToUse);
+                        double error = targetValue - m_perceptrons[j].predict(inputs);
+                        m_perceptrons[j].updateWeights(inputs, error);
                     }
                 }
                 epochCount++;
