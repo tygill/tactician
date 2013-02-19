@@ -51,6 +51,19 @@ def decr_value(map, val):
     else:
         assert False, "Decrementing card pile that doesn't exist"
     
+def move_card(a, b, card):
+    decr_value(a, card)
+    incr_value(b, card)
+    
+# Moves all cards from a to b
+def move_cards(a, b):
+    for key in a.keys():
+        if key in b:
+            b[key] += a[key]
+        else:
+            b[key] = a[key]
+        a[key] = 0
+    
 class dominion_player:
     
     def __init__(self, game, name):
@@ -68,7 +81,28 @@ class dominion_player:
     def set_final_score(self, score):
         self.final_score = score
         
-    def gain_card(self, card):
+    # Game State Modifiers
+    
+    def reshuffle(self):
+        move_cards(self.discard, self.deck)
+    
+    def draw(self, card):
+        # Attempt to automatically reshuffle if things aren't quite in sync
+        # This will mean that the discard pile is not truly what it is, but it should be close enough
+        # for current purposes.
+        # TODO: If we choose to include a 'cards in discard pile' or similar feature, this can be made better.
+        if self.deck[card] == 0:
+            self.reshuffle()
+        move_card(self.deck, self.hand, card)
+        
+    def cleanup(self):
+        move_cards(self.in_play, self.discard) # Yes, this moves duration cards as well, but for out purposes this is fine.
+        move_cards(self.hand, self.discard)
+        
+    def play(self, card):
+        move_card(self.hand, self.in_play, card)
+        
+    def gain(self, card):
         incr_value(self.discard, card)
     
 # This class stores information about the state of a game of dominion
@@ -84,6 +118,13 @@ class dominion_game:
         self.empty_piles = []
         self.winner = None
         self.game_id = None
+        
+        # Turn context
+        self.current_player = None
+        self.turn_number = 0
+        self.money = 0
+        self.copper_value = 1 # Coppersmith
+        self.fools_gold_value = 1 # Fool's Gold
         
     # Game Initialization functions
     # -----------------------------
@@ -136,9 +177,10 @@ class dominion_game:
                 self.supply[card] = 10
         for player in self.players.values():
             for i in range(7):
-                self.gain_card_from_supply(player, 'Copper')
+                self.gain('Copper', player)
             for i in range(3):
-                self.gain_card_from_supply(player, 'Estate')
+                self.gain('Estate', player)
+            player.reshuffle()
                 
                 
     # Game state manipulation functions
@@ -167,11 +209,35 @@ class dominion_game:
     # Game Modifiers
     # ----
     
+    def reshuffle(self, player = None):
+        self.get_player(player).reshuffle()
+    
+    # Moves a card from a players deck to their hand (this may not be necessary...)
+    def draw(self, card, player = None):
+        assert_card(card)
+        self.get_player(player).draw(card)
+        
+    def cleanup(self):
+        self.get_player().cleanup()
+        
+    def play(self, card):
+        assert_card(card)
+        self.get_player().play(card)
+        # If the card isn't a treasure, this will return 0, so this is safe for any card played.
+        # At some point, some things might need to be processed here, but I don't know for sure now.
+        # We'll see how the logs look.
+        self.money += self.treasure_card_value(card)
+        
+    def buy(self, card):
+        assert_card(card)
+        # TODO: Should this decrement the available money based on the cost of the card bought?
+        self.gain(card)
+    
     # Gives a card from the supply to a player
-    def gain_card_from_supply(self, player, card):
+    def gain(self, card, player = None):
         assert_card(card)
         decr_value(self.supply, card)
-        self.get_player(player).gain_card(card)
+        self.get_player(player).gain(card)
         
                 
     # Utility methods
@@ -180,8 +246,10 @@ class dominion_game:
     def get_players(self):
         return self.players.keys()
     
-    def get_player(self, player):
-        if type(player) is str:
+    def get_player(self, player = None):
+        if player is None:
+            return self.players[self.current_player]
+        elif type(player) is str:
             return self.players[player]
         else:
             # Otherwise, assume its the actual player object

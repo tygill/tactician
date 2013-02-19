@@ -13,7 +13,7 @@ card_regex = re.compile('<[\\w=\\-"\' ]+>(?P<card>[\\w\\-\' ]+)<[/\\w=\\-"\' ]+>
 # Extracts:
 #  card: Name of card (Note: might be plural!)
 #  count: Number prefixing card (Note that it might be a or an as well as a number)
-card_count_regex = re.compile('(?P<count>[an\d]+) <[\\w=\\-"\' ]+>(?P<card>[\\w\\-\' ]+)<[/\\w=\\-"\' ]+>')
+card_count_regex = re.compile('(?:(?P<count>[an\d]+) )?<[\\w=\\-"\' ]+>(?P<card>[\\w\\-\' ]+)<[/\\w=\\-"\' ]+>')
 
 
 # Specific Regexes
@@ -65,7 +65,7 @@ turn_order_7p_regex = re.compile(r'Turn order is (?P<first>.*), (?P<second>.*), 
 turn_order_8p_regex = re.compile(r'Turn order is (?P<first>.*), (?P<second>.*), (?P<third>.*), (?P<fourth>.*), (?P<fifth>.*), (?P<sixth>.*), (?P<seventh>.*), and then (?P<eighth>.*)\.')
 #turn_order_regex = re.compile(r'Turn order is (?P<first>.*),? (?:and then )?(?P<second>.*)(?:,? (?:and then )?(?P<third>.*))?(?:,? (?:and then )?(?P<fourth>.*))?(?:,? (?:and then )?(?P<fifth>.*))?(?:,? (?:and then )?(?P<sixth>.*))?(?:,? (?:and then )?(?P<seventh>.*))?(?:,? (?:and then )?(?P<eighth>.*))?')
 
-# Turn Regexes
+# Game Regexes
 # ------------
 
 # Extracts
@@ -80,21 +80,104 @@ possessed_turn_header_regex = re.compile('\\s*<img src="http://www\\.gravatar\\.
 #  player: Player who got an extra turn
 outpost_turn_header_regex = re.compile('\\s*<img src="http://www\\.gravatar\\.com/avatar/[\w]+\\?s=40&d=identicon&r=PG" width=40 height=40 class=avatar><b>&mdash; (?P<player>.*)\'s extra turn \\(from <span class=card-duration>Outpost</span>\\) &mdash;</b>')
 
+# Extracts
+#  player: Player who drew
+#  cards: List of cards drawn (extract with card_count_regex)
+draw_hand_regex = re.compile('\\s*<span class=logonly>\\((?P<player>.*)(?:\'s first hand| draws): (?P<cards>.*)\\.\\)</span>')
+
+# Extracts
+#  player: Player who played the cards
+#  cards: List of cards played (may be multiple, especially for treasures, both in quantity and type. e.g., 2 Coppers and a Silver)
+play_cards_regex = re.compile(r'\s*(?P<player>.*) plays (?P<cards>.*)\.')
+
+# Extracts
+#  player: Player who played the cards
+#  card: Card purchased
+buy_card_regex = re.compile('\\s*(?P<player>.*) buys a <[\\w=\\-"\' ]+>(?P<card>[\\w\\-\' ]+)<[/\\w=\\-"\' ]+>\\.')
+
+# Extracts
+#  player: Player who reshuffled
+reshuffle_regex = re.compile(r'\s*\((?P<player>.*) reshuffles\.\)')
+
+
+
 br_regex = re.compile(r'\s*<br>$')
-
-
-
 separator = '----------------------'
+
 
 
 # Parses an extracted count into a number
 def parse_count(count):
     if count == 'a' or count == 'an':
         return 1
-    else:
+    elif count is not None:
         return int(count)
+    else:
+        return None
+        
+def pr(s):
+    print s
+
+# This is a utility function that makes running some action on a list of cards much simpler.
+# It accepts the string list of cards and a function taking a single card as a parameter.
+# It then calls func on each card in the list the appropriate number of times.
+# For example, the string of '2 Coppers and 1 Silver' would call func twice with Copper, and onces with Silver.
+# It will also look at cards in a string without the prefixed counts
+def foreach_card(cards, func):
+    for card_match in card_count_regex.finditer(cards):
+        count = parse_count(card_match.group('count'))
+        card = sanitize_card(card_match.group('card'))
+        if count is not None:
+            for i in range(count):
+                func(card)
+        else:
+            func(card)
+            
+# Similar to foreach_card(), except it passes the count to the func as well as the card
+def foreach_cards(cards, func):
+    for card_match in card_count_regex.finditer(cards):
+        count = parse_count(card_match.group('count'))
+        card = card_match.group('card')
+        func(count, card)
 
 class isotropic_parser:
+
+    # Since this is the most interesting function (it's where each line gets processed),
+    # it's at the top to make getting to it easier.
+    # It should ALWAYS return True if the line was matched, that way the caller knows to
+    # print other lines to warn that they weren't processed.
+    def read_line(self, line):
+        # Check the line to see what occurred.
+        # Please keep the common/generic type lines first, for efficiencies sake.
+        # Card specific checks should happen last, as they will only occur in games where that card is.
+        
+        # Check for played cards (actions, treasures)
+        match = play_cards_regex.match(line)
+        if match:
+            foreach_card(match.group('cards'), lambda card: self.game.play(card))
+            return True
+            
+        # Check for purchased cards
+        match = buy_card_regex.match(line)
+        if match:
+            self.game.buy(match.group('card'))
+            return True
+            
+        # Check for the cleanup phase
+        match = draw_hand_regex.match(line)
+        if match:
+            self.game.cleanup()
+            foreach_card(match.group('cards'), lambda card: self.game.draw(card))
+            return True
+            
+        # Check for reshuffling
+        match = reshuffle_regex.match(line)
+        if match:
+            self.game.reshuffle(match.group('player'))
+            return True
+            
+        # Default return
+        return False
     
     def __init__(self):
         self.game = dominion_game()
@@ -107,6 +190,7 @@ class isotropic_parser:
         self.read_game()
         
     def read_header(self):
+        # Get some game metadata from the first line
         first_line = self.next() # Read the first line
         match = first_line_regex.match(first_line)
         if match:
@@ -117,14 +201,13 @@ class isotropic_parser:
             
         # Get the piles that signalled the end of the game
         empty_piles = self.next() # Read the line with the ending conditions
-        for match in card_regex.finditer(empty_piles):
-            self.game.add_empty_pile(sanitize_card(match.group('card')))
+        foreach_card(empty_piles, lambda card: self.game.add_empty_pile(sanitize_card(card)))
             
         self.next() # Skip line 3
         
+        # Read the cards that will be in the supply
         cards_in_supply = self.next()
-        for match in card_regex.finditer(cards_in_supply):
-            self.game.add_card_to_supply(match.group('card'))
+        foreach_card(cards_in_supply, lambda card: self.game.add_card_to_supply(card))
             
         self.next() # Skip line 5
         
@@ -137,57 +220,47 @@ class isotropic_parser:
         # Loop until the separator is found, at which point the method returns
         while True:
             player_first_line = self.next() # Read the player first line (points)
+            # If this line is the separator, we have read all the players
             if player_first_line == separator:
                 return
+            
             match = player_first_line_regex.match(player_first_line)
             if match:
                 place = int(match.group('place'))
                 player = match.group('player')
                 score = int(match.group('score'))
                 turns = int(match.group('turns'))
-                #print player
                 cards = match.group('cards')
-                for card_match in card_count_regex.finditer(cards):
-                    count = parse_count(card_match.group('count'))
-                    card = card_match.group('card')
-                    singular_card = sanitize_card(card)
-                    #print '  {0} {1} ({2})'.format(count, card, singular_card)
+                #foreach_cards(cards, lambda count, card: pr('  {0} {1} ({2})'.format(count, card, sanitize_card(card))))
                 self.game.add_player(player)
                 self.game.set_final_score(player, score)
             else:
                 self.unmatched_line(player_first_line, player_first_line_regex)
                 
-            player_second_line = self.next() # Read players 2nd line (openning move)
+            player_second_line = self.next() # Read players 2nd line (opening move)
             # This is skipped for now - its not needed
             
+            # Read the third line for the player - this holds the final contents of their entire deck
             player_third_line = self.next()
             match = player_third_line_regex.match(player_third_line)
             if match:
                 deck_size = parse_count(match.group('deck_size'))
                 cards = match.group('cards')
-                #print 'Deck size: {0}'.format(deck_size)
-                for card_match in card_count_regex.finditer(cards):
-                    count = parse_count(card_match.group('count'))
-                    card = card_match.group('card')
-                    singular_card = sanitize_card(card)
-                    #print '  {0} {1} ({2})'.format(count, card, singular_card)
+                #foreach_cards(cards, lambda count, card: pr('  {0} {1} ({2})'.format(count, card, sanitize_card(card))))
             else:
                 self.unmatched_line(player_third_line, player_third_line_regex)
                     
             self.next() # Read the blank line that follows each player
         
     def read_game(self):
+        # Initialize the game (this should be called after all the supply piles are established though)
         self.game.init_game()
         
         self.next() # Read the blank line after the separator
-        
-        #print 'Trash:'
+
+        # Read the contents of the trash
         trash_line = self.next() # Read the trash line
-        for match in card_count_regex.finditer(trash_line):
-            count = parse_count(match.group('count'))
-            card = match.group('card')
-            singular_card = sanitize_card(card)
-            #print '  {0} {1} ({2})'.format(count, card, singular_card)
+        #foreach_cards(trash_line, lambda count, card: pr('  {0} {1} ({2})'.format(count, card, sanitize_card(card))))
         
         self.next() # Read the blank line after the trash
         
@@ -197,7 +270,40 @@ class isotropic_parser:
             
         self.next() # Read the blank line after the game log
         
+        # Read the turn order
+        # This calls out a separate function, as making a single regex proved difficult. This was simpler.
         turn_order_line = self.next() # Read the turn order line
+        match = self.match_turn_order(turn_order_line)
+        if match:
+            #`print 'Players (in order): {0}'.format(match.groups())
+            pass
+        else:
+            self.unmatched_line(turn_order_line, turn_order_regex)
+            
+        self.next() # Read the blank line after the turn order
+        
+        for player in self.game.get_players():
+            starting_hand = self.next()
+            match = draw_hand_regex.match(starting_hand)
+            if match:
+                player = match.group('player')
+                cards = match.group('cards')
+                foreach_card(cards, lambda card: self.game.draw(card, player))
+            else:
+                self.unmatched_line(starting_hand, draw_hand_regex)
+            
+        line = self.next() # Read the <br> line after each players starting hands
+        if not br_regex.match(line):
+            self.unmatched_line(line, br_regex)
+        
+        # Read each turn (read_turn() returns true until there's no more turns to read - thanks <br> tags)
+        while (self.read_turn()):
+            pass
+            
+        print 'Parsing complete.'
+        # TODO: Read the footer? It doesn't really have any new information though.
+            
+    def match_turn_order(self, turn_order_line):
         # Making a single regex for any number of players didn't work out so well
         num_players = len(self.game.get_players())
         if num_players == 2:
@@ -216,44 +322,31 @@ class isotropic_parser:
             match = turn_order_8p_regex.match(turn_order_line)
         else:
             match = None
-        if match:
-            #`print 'Players (in order): {0}'.format(match.groups())
-            pass
-        else:
-            self.unmatched_line(turn_order_line, turn_order_regex)
-            
-        self.next() # Read the blank line after the turn order
+        return match
         
-        for player in self.game.get_players():
-            self.next() # TODO: Read the players starting hands
-            
-        line = self.next() # Read the <br> line after each players starting hands
-        if not br_regex.match(line):
-            self.unmatched_line(line, br_regex)
-        
-        # Read each turn (read_turn() returns true until there's no more turns to read - thanks <brpossesseeags)
-        while (self.read_turn()):
-            pass
-            
-        print 'Parsing complete.'
-        # TODO: Read the footer? It doesn't really have any new information though.
-            
     def read_turn(self):
         self.read_turn_header()
         
-        line = self.next()
+        line = 'Make sure the loop starts by making this a non-zero length string. It will get reset before it gets parsed anyway.'
         # This loops until an empty line is found (which only occurs at the very end of the document), and then returns false, indicating there is not another turn to be read.
         # Otherwise, this will break out when a <br> has been found, which will cause this to return true.
         while len(line) != 0:
+            line = self.next() # Read the next line
+            
             # Check to see if the turn is over
             if br_regex.match(line):
                 return True
+                
+            print 'Parsing line: {0}'.format(line)
             
-            # Any other matches that use up the line should continue the loop so this is only called
-            # when a line is unprocessed.
-            self.unmatched_line(line)
+            success = self.read_line(line)
             
-            line = self.next()
+            # If the line was not successfully read, print it so it can be added.
+            if not success:
+                print
+                print 'Unknown line: {0}'.format(line)
+                print
+                exit(0) # Until a more complete set of parsing is built up, add things in one at a time
         # There is no more turn to read
         return False
         
@@ -279,7 +372,7 @@ class isotropic_parser:
                     self.unmatched_line(turn_first_line, turn_header_regex)
                     self.unmatched_line(turn_first_line, possessed_turn_header_regex)
                     self.unmatched_line(turn_first_line, outpost_turn_header_regex)
-        
+                    
     def unmatched_line(self, line, regex = None):
         if regex is None:
             print 'Line didn\'t match:\n Line: {0}'.format(line)
