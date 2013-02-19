@@ -148,7 +148,12 @@ class dominion_game:
     # ----
     
     # Resets all the turn context variables
-    def start_new_turn(self):
+    def start_new_turn(self, player, turn_number = None):
+        self.current_player = player
+        # If the turn number is None, then we don't modify it. We leave it what it was before.
+        if turn_number is not None:
+            self.turn_number = turn_number
+        
         self.money = 0 # Current money
         
         self.copper_value = 1 # Coppersmith
@@ -280,7 +285,7 @@ class dominion_game:
             
 def add_card(card, plural = None):
     cards.add(card)
-    if plural == None:
+    if plural is None:
         # By default, the plural of a card is just an 's' added to the end
         plural = card + 's'
     plural_cards[plural] = card

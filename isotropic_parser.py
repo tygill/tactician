@@ -63,12 +63,28 @@ turn_order_6p_regex = re.compile(r'Turn order is (?P<first>.*), (?P<second>.*), 
 turn_order_7p_regex = re.compile(r'Turn order is (?P<first>.*), (?P<second>.*), (?P<third>.*), (?P<fourth>.*), (?P<fifth>.*), (?P<sixth>.*), and then (?P<seventh>.*)\.')
 # 8p
 turn_order_8p_regex = re.compile(r'Turn order is (?P<first>.*), (?P<second>.*), (?P<third>.*), (?P<fourth>.*), (?P<fifth>.*), (?P<sixth>.*), (?P<seventh>.*), and then (?P<eighth>.*)\.')
-
 #turn_order_regex = re.compile(r'Turn order is (?P<first>.*),? (?:and then )?(?P<second>.*)(?:,? (?:and then )?(?P<third>.*))?(?:,? (?:and then )?(?P<fourth>.*))?(?:,? (?:and then )?(?P<fifth>.*))?(?:,? (?:and then )?(?P<sixth>.*))?(?:,? (?:and then )?(?P<seventh>.*))?(?:,? (?:and then )?(?P<eighth>.*))?')
 
+# Turn Regexes
+# ------------
+
+# Extracts
+#  player: Player name whose turn it now is
+#  turn: Turn number
+turn_header_regex = re.compile('\\s*&mdash; (?P<player>.*)\'s turn (?P<turn>\\d+) &mdash;')
+# Extracts
+#  possessee: Player whose hand is being possessed
+#  possessor: Player doing the possessing
+possessed_turn_header_regex = re.compile('\\s*<img src="http://www\\.gravatar\\.com/avatar/[\w]+\\?s=40&d=identicon&r=PG" width=40 height=40 class=avatar><b>&mdash; (?P<possessee>.*)\'s turn \\(possessed by (?P<possessor>.*)\\) &mdash;</b>')
+# Extracts
+#  player: Player who got an extra turn
+outpost_turn_header_regex = re.compile('\\s*<img src="http://www\\.gravatar\\.com/avatar/[\w]+\\?s=40&d=identicon&r=PG" width=40 height=40 class=avatar><b>&mdash; (?P<player>.*)\'s extra turn \\(from <span class=card-duration>Outpost</span>\\) &mdash;</b>')
+
+br_regex = re.compile(r'\s*<br>$')
 
 
-separator = '----------------------\n'
+
+separator = '----------------------'
 
 
 # Parses an extracted count into a number
@@ -80,9 +96,11 @@ def parse_count(count):
 
 class isotropic_parser:
     
-    def __init__(self, filename):
-        self.file = open(filename)
+    def __init__(self):
         self.game = dominion_game()
+        
+    def read(self, filename):
+        self.file = open(filename)
         
         self.read_header()
         self.read_scores()
@@ -174,7 +192,7 @@ class isotropic_parser:
         self.next() # Read the blank line after the trash
         
         game_log_line = self.next() # Read the game log line
-        if game_log_line != '<hr/><b>Game log</b>\n':
+        if game_log_line != '<hr/><b>Game log</b>':
             self.unmatched_line(game_log_line, '<hr/><b>Game log</b>')
             
         self.next() # Read the blank line after the game log
@@ -209,18 +227,83 @@ class isotropic_parser:
         for player in self.game.get_players():
             self.next() # TODO: Read the players starting hands
             
+        line = self.next() # Read the <br> line after each players starting hands
+        if not br_regex.match(line):
+            self.unmatched_line(line, br_regex)
         
+        # Read each turn (read_turn() returns true until there's no more turns to read - thanks <brpossesseeags)
+        while (self.read_turn()):
+            pass
+            
+        print 'Parsing complete.'
+        # TODO: Read the footer? It doesn't really have any new information though.
+            
+    def read_turn(self):
+        self.read_turn_header()
         
+        line = self.next()
+        # This loops until an empty line is found (which only occurs at the very end of the document), and then returns false, indicating there is not another turn to be read.
+        # Otherwise, this will break out when a <br> has been found, which will cause this to return true.
+        while len(line) != 0:
+            # Check to see if the turn is over
+            if br_regex.match(line):
+                return True
+            
+            # Any other matches that use up the line should continue the loop so this is only called
+            # when a line is unprocessed.
+            self.unmatched_line(line)
+            
+            line = self.next()
+        # There is no more turn to read
+        return False
         
-    def unmatched_line(self, line, regex):
-        if type(regex) == str:
+    def read_turn_header(self):
+        turn_first_line = self.next()
+        match = turn_header_regex.match(turn_first_line)
+        if match:
+            player = match.group('player')
+            turn = int(match.group('turn'))
+            self.game.start_new_turn(player, turn)
+        else:
+            # Maybe this is a possessed turn?
+            match = possessed_turn_header_regex.match(turn_first_line)
+            if match:
+                player = match.group('possessor')
+                self.game.start_new_turn(player)
+            else:
+                match = outpost_turn_header_regex.match(turn_first_line)
+                if match:
+                    player = match.group('player')
+                    self.game.start_new_turn(player)
+                else:
+                    self.unmatched_line(turn_first_line, turn_header_regex)
+                    self.unmatched_line(turn_first_line, possessed_turn_header_regex)
+                    self.unmatched_line(turn_first_line, outpost_turn_header_regex)
+        
+    def unmatched_line(self, line, regex = None):
+        if regex is None:
+            print 'Line didn\'t match:\n Line: {0}'.format(line)
+        elif type(regex) == str:
             print 'Line didn\'t match:\n Line: {0}\n Pattern: {1}'.format(line, regex)
         else:
             print 'Line didn\'t match:\n Line: {0}\n Pattern: {1}'.format(line, regex.pattern)
     
     def next(self):
-        return self.file.next()
+        return self.file.next().strip()
+
+        
+        
+# This class handles logging features to be trained on
+class feature_logger:
+    
+    def __init__(self, game, filename):
+        self.game = game
+        #self.file = open(filename, 'w')
+        
+        
     
 if __name__ == '__main__':
-    parser = isotropic_parser('test.html')
+    parser = isotropic_parser()
+    logger = feature_logger(parser.game, 'features.txt')
+    parser.read('test.html')
     
