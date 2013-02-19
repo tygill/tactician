@@ -6,13 +6,13 @@ Inputs:
     0/1  - Is card in use? (202 kingdom cards that could be in the supply though...)
     0/1  - Is Curse in use?
     0/1  - Is Platinum/Colony in use?
-    0..1 - How many Colonies are left? (Percentage)
-    0..1 - How many Provinces are left? (Percentage)
-    0..1 - How many Duchies are left? (Percentage)
-    0..1 - How many Estates are left? (Percentage)
-    0..1 - How many of each other Victory card are left?
-    0..1 - How many Curses are left? (Percentage) (Know how many there should be in a game)
-    0..1 - How many piles are empty? (Percentage - 2-4 player games end at 3 piles, 5-6 player games end at 4)
+    0.12 - How many Colonies are left? (Percentage?)
+    0.21 - How many Provinces are left? (Percentage?)
+    0.12 - How many Duchies are left? (Percentage?)
+    0.12 - How many Estates are left? (Percentage?)
+    0.12 - How many of each other Victory card are left?
+    0.70 - How many Curses are left? (Percentage?) (Know how many there should be in a game)
+    0..4 - How many piles are empty? (Percentage? - 2-4 player games end at 3 piles, 5-6 player games end at 4)
     0..L - What turn is it? (Possibly normalized logarithmically - early turns are more different than later turns. Maybe sqrt to normalize?)
     2..6 - How many players are there?
     0... - How many cards are in my deck?

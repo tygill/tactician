@@ -18,6 +18,7 @@ def assert_card(card):
     assert is_card(card), "invalid card: {0}".format(card)
         
 # Converts plural cards to singular, and returns None if the card is not valid
+# This should be called by the parser before passing cards in
 def sanitize_card(card):
     if is_card(card):
         return card
@@ -52,7 +53,8 @@ def decr_value(map, val):
     
 class dominion_player:
     
-    def __init__(self, name):
+    def __init__(self, game, name):
+        self.game = game
         self.name = name
         # Piles are implemented as a dictionary from card names to how many of them are in the pile
         self.deck = {}
@@ -87,7 +89,7 @@ class dominion_game:
     # -----------------------------
     
     def add_player(self, player):
-        self.players[player] = dominion_player(player)
+        self.players[player] = dominion_player(self, player)
         self.num_players = len(self.players)
         
     def set_final_score(self, player, score):
@@ -142,6 +144,24 @@ class dominion_game:
     # Game state manipulation functions
     # ---------------------------------
     
+    # Turn context modifiers
+    # ----
+    
+    # Resets all the turn context variables
+    def start_new_turn(self):
+        self.money = 0 # Current money
+        
+        self.copper_value = 1 # Coppersmith
+        self.fools_gold_value = 1 # Fool's Gold (must be updated when a treasure card is 'played')
+    
+    # This should not be used for treasure cards with non-variable values (e.g., Copper, Quarry, etc.)
+    # Treasure cards with variable costs should use this (e.g., Bank, Philosopher's Stone)
+    def add_money(self, money):
+        self.money += money
+    
+    # Game Modifiers
+    # ----
+    
     # Gives a card from the supply to a player
     def gain_card_from_supply(self, player, card):
         assert_card(card)
@@ -152,6 +172,9 @@ class dominion_game:
     # Utility methods
     # ---------------
     
+    def get_players(self):
+        return self.players.keys()
+    
     def get_player(self, player):
         if type(player) is str:
             return self.players[player]
@@ -161,23 +184,32 @@ class dominion_game:
     
     # Depending on the number of players, the victory card piles start with different sizes
     def victory_card_initial_supply(self, card):
-        if self.num_players == 2:
-            return 8
-        elif self.num_players == 3 or self.num_players == 4:
-            return 12
-        elif self.num_players == 5 or self.num_players == 6:
+        if card == 'Province':
+            if self.num_players == 2:
+                return 8
+            elif self.num_players == 3 or self.num_players == 4:
+                return 12
             # As per Intrigue's instructions, there are more Provinces in 5 and 6 player games.
             # Other victory cards are unaffected.
-            # Even though I couldn't find proof of this, I'll assume the same applies for colonies
-            # Though as isotropic doesn't support 5 or 6 player games, we shouldn't ever hit this case now anyway.
-            if card == 'Province' or card == 'Colony':
-                if self.num_players == 5:
-                    return 15
-                elif self.num_players == 6:
-                    return 18
+            elif self.num_players == 5:
+                return 15
+            elif self.num_players == 6:
+                return 18
+            # It appears isotropic supports up to 8 players, and it just uses 21 provinces
             else:
-                return 12
-        assert False, "Failed to get victory card initial supply"
+                return 21
+        
+        # Estates need to have enough cards to give each player 3, and still have 8 or 12 left
+        if card == 'Estate':
+            if self.num_players == 2:
+                return 8 + 6
+            else:
+                return 12 + self.num_players * 3
+        
+        if self.num_players == 2:
+            return 8
+        else:
+            return 12
         
     def curse_card_initial_supply(self):
         return (self.num_players - 1) * 10
@@ -208,6 +240,43 @@ class dominion_game:
                 return 60
             else:
                 return 10
+                
+    def treasure_card_value(self, card):
+        if card == 'Copper':
+            return self.copper_value
+        elif card == 'Silver':
+            return 2
+        elif card == 'Gold':
+            return 3
+        elif card == 'Platinum':
+            return 5
+        elif card == 'Harem':
+            return 2
+        elif card == 'Contraband':
+            return 3
+        elif card == 'Hoard':
+            return 2
+        elif card == 'Loan':
+            return 1
+        elif card == 'Quarry':
+            return 1
+        elif card == 'Royal Seal':
+            return 2
+        elif card == 'Talisman':
+            return 1
+        elif card == 'Cache':
+            return 3
+        elif card == 'Fool\'s Gold':
+            return self.fools_gold_value
+        elif card == 'Ill-Gotten Gains':
+            return 1
+        elif card == 'Diadem':
+            return 2
+        elif card == 'Stash':
+            return 2
+        # There are other treasure cards, but they have variable values, so there should be a +$x line following them
+        else:
+            return 0
             
 def add_card(card, plural = None):
     cards.add(card)
@@ -389,10 +458,10 @@ add_victory_card('Silk Road')
 # Dual Victory Cards
 add_victory_treasure_card('Harem')
 
-add_victory_treasure_card('Nobles', 'Nobles')
-add_victory_treasure_card('Great Hall')
-add_victory_treasure_card('Island')
-add_victory_treasure_card('Tunnel')
+add_victory_action_card('Nobles', 'Nobles')
+add_victory_action_card('Great Hall')
+add_victory_action_card('Island')
+add_victory_action_card('Tunnel')
 
 # Treasure Cards
 add_treasure_card('Philosopher\'s Stone')
