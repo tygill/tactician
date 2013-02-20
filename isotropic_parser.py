@@ -21,24 +21,23 @@ card_count_regex = re.compile('(?:(?P<count>[an\d]+) )?<[\\w=\\-"\' ]+>(?P<card>
 
 # Header
 
-# Extracts:
+# Matches: First line of the document
 #  game_id: The id of the game
 #  winner: player who won the game
 first_line_regex = re.compile(r'<html><head><link rel="stylesheet" href="/semistatic/log\.css"><title>Dominion Game #(?P<game_id>\d+)</title></head><body><pre>(?P<winner>.+) wins!')
 
 # Player info
 
-# Extracts:
+# Matches: Player lines in the second section of the log
 #  place: Rank in game
 #  player: Name of player
 #  score: Players final score
 #  cards: List of cards and counts (can be extraced with card_count_regex)
 #  turns: Number of turns the player had
 player_first_line_regex = re.compile(r'<b>#(?P<place>\d) (?P<player>.+)</b>: (?P<score>[\d\-]+) points \((?P<cards>.+)\); (?P<turns>\d+) turns')
-# Extracts: (admittedly, card_regex could just be run on the whole line with the same result...)
+# Matches: (admittedly, card_regex could just be run on the whole line with the same result...)
 #  cards: List of cards bought on the openning turns (card_regex can pull them out)
 player_second_line_regex = re.compile(r'\s*opening: (?P<cards>)')
-# Extracts:
 #  deck_size: Number of cards in deck (total)
 #  cards: List of cards and counts in deck
 player_third_line_regex = re.compile(r'\s*\[(?P<deck_size>\d+) cards?\] (?P<cards>.*)')
@@ -47,7 +46,6 @@ player_third_line_regex = re.compile(r'\s*\[(?P<deck_size>\d+) cards?\] (?P<card
 
 # These regexes pull out the turn orderings for each different number of players.
 # Making a single regex that combined all of these proved too much.
-# Extracts:
 #  first, second, third, fourth, fifth, sixth, seventh, eighth: Player orders
 # 2p
 turn_order_2p_regex = re.compile(r'Turn order is (?P<first>.*) and then (?P<second>.*)\.')
@@ -68,36 +66,100 @@ turn_order_8p_regex = re.compile(r'Turn order is (?P<first>.*), (?P<second>.*), 
 # Game Regexes
 # ------------
 
-# Extracts
+# Turn header extraction (for regular, possessed, and outpost turns)
 #  player: Player name whose turn it now is
 #  turn: Turn number
 turn_header_regex = re.compile('\\s*&mdash; (?P<player>.*)\'s turn (?P<turn>\\d+) &mdash;')
-# Extracts
 #  possessee: Player whose hand is being possessed
 #  possessor: Player doing the possessing
 possessed_turn_header_regex = re.compile('\\s*<img src="http://www\\.gravatar\\.com/avatar/[\w]+\\?s=40&d=identicon&r=PG" width=40 height=40 class=avatar><b>&mdash; (?P<possessee>.*)\'s turn \\(possessed by (?P<possessor>.*)\\) &mdash;</b>')
-# Extracts
 #  player: Player who got an extra turn
 outpost_turn_header_regex = re.compile('\\s*<img src="http://www\\.gravatar\\.com/avatar/[\w]+\\?s=40&d=identicon&r=PG" width=40 height=40 class=avatar><b>&mdash; (?P<player>.*)\'s extra turn \\(from <span class=card-duration>Outpost</span>\\) &mdash;</b>')
 
-# Extracts
+# Matches: (<player> draws: <cards>)
 #  player: Player who drew
 #  cards: List of cards drawn (extract with card_count_regex)
 draw_hand_regex = re.compile('\\s*<span class=logonly>\\((?P<player>.*)(?:\'s first hand| draws): (?P<cards>.*)\\.\\)</span>')
 
-# Extracts
+# Matches: <player> plays <cards>.
 #  player: Player who played the cards
 #  cards: List of cards played (may be multiple, especially for treasures, both in quantity and type. e.g., 2 Coppers and a Silver)
 play_cards_regex = re.compile(r'\s*(?P<player>.*) plays (?P<cards>.*)\.')
 
-# Extracts
+# Matches: <player> buys a <card>.
 #  player: Player who played the cards
 #  card: Card purchased
 buy_card_regex = re.compile('\\s*(?P<player>.*) buys a <[\\w=\\-"\' ]+>(?P<card>[\\w\\-\' ]+)<[/\\w=\\-"\' ]+>\\.')
 
-# Extracts
+# Matches: (<player> reshuffles.)
 #  player: Player who reshuffled
-reshuffle_regex = re.compile(r'\s*\((?P<player>.*) reshuffles\.\)')
+reshuffle_regex = re.compile(r'\s*(?:\.{3} )*\((?P<player>.*) reshuffles\.\)')
+
+# Matches: ... getting +$n.
+#  money: Amount of money added to the turn context
+get_money_regex = re.compile(r'\s*(?:\.{3} )*getting \+\$(?P<money>\d+)\.')
+
+# Matches: ... getting +n action(s).
+#  actions: Number of actions added
+get_actions_regex = re.compile(r'\s*(?:\.{3} )*getting \+(?P<actions>\d+) actions?\.')
+
+# Matches: ... getting +n buy(s).
+#  buys: Number of buys added
+get_buys_regex = re.compile(r'\s*(?:\.{3} )*getting \+(?P<buys>\d+) buys?\.')
+
+# Matches: ... [<player>] draw[ing|s] n card(s).
+#  player: Player who draws (if None, it means the current player)
+#  cards: Number of cards drawn
+draw_cards_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.*) )?draw(?:ing|s) (?P<cards>\d+) cards?\.')
+
+# Matches: ... drawing n card(s) and getting +n buy(s).
+#  player: Player (or None, meaning current player. Wharf gives a player)
+#  cards: Number of cards drawn
+#  buys: Number of buys added
+draw_cards_get_buys_regex = re.compile(r'\s*(?:(?P<player>.*) )?draw(?:ing|s) (?P<cards>\d+) cards? and get(?:ting|s) \+(?P<buys>\d+) buys?(?: from the <span class=card-duration>Wharf</span>)?\.')
+
+# Matches: ... [<player>] discard[ing|s] <cards>.
+#  player: Player, or None for current player
+#  cards: List of cards discarded (may be from deck or hand or who knows where)
+discard_cards_regex = re.compile(r'\s*(?:(?P<player>.*) )?discard(?:ing|s) (?P<cards>.*)\.')
+
+# Matches: ... [<player>] gain[ing|s] a <card>.
+#  player: Player who gains something (if None, it means the current player)
+#  card: The card gained.
+gain_cards_regex = re.compile('\\s*(?:\\.{3} )*(?:(?P<player>.*) )?gain(?:ing|s) an? <[\\w=\\-"\' ]+>(?P<card>[\\w\\-\' ]+)<[/\\w=\\-"\' ]+>\\.')
+
+# Matches: ... [<player>] trash[ing|es] <cards>.
+#  player: Player who trashed a card (or None, meaning current player)
+#  cards: Cards trashed
+trash_cards_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.*) )?trash(?:ing|es) (?P<cards>.*)\.')
+
+# Used by Fortune Teller, Pirate Ship, etc...
+# Matches: ... <player> reveals <cards>.
+#  player: Player who reveals cards
+#  cards: Cards revealed
+reveal_cards_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.*) reveals (?P<cards>.*)\.')
+
+
+
+# Card Specific Regexes
+# ---------------------
+
+# Swindler
+#  player: Player who trashes something
+#  card: Card trashed
+swindler_trash_regex = re.compile('\\s*(?:\\.{3} )*(?P<player>.*) turns up an? <[\\w=\\-"\' ]+>(?P<card>[\\w\\-\' ]+)<[/\\w=\\-"\' ]+> and trashes it\\.')
+#  player: Player whose cards were replaced
+#  old_card: Card trashed (same as card extracted from trash_regex above)
+#  new_card: New card gained to replace it
+swindler_replace_regex = re.compile('\\**(?:\\.{3} )*replacing (?P<player>.*)\'s <[\\w=\\-"\' ]+>(?P<old_card>[\\w\\-\' ]+)<[/\\w=\\-"\' ]+> with an? <[\\w=\\-"\' ]+>(?P<new_card>[\\w\\-\' ]+)<[/\\w=\\-"\' ]+>\\.')
+
+# Fortune Teller - others?
+# Matches: <player> puts the <card> back onto the deck.
+#  player
+#  card
+fortune_teller_put_cards_on_deck_regex = re.compile('\\s*(?:\\.{3} )*(?P<player>.*) puts the <[\\w=\\-"\' ]+>(?P<card>[\\w\\-\' ]+)<[/\\w=\\-"\' ]+> back onto the deck\\.')
+
+
 
 
 
@@ -108,7 +170,7 @@ separator = '----------------------'
 
 # Parses an extracted count into a number
 def parse_count(count):
-    if count == 'a' or count == 'an':
+    if count == 'a' or count == 'an': # or count == 'the' # Does the ever get used?
         return 1
     elif count is not None:
         return int(count)
@@ -154,12 +216,14 @@ class isotropic_parser:
         # Check for played cards (actions, treasures)
         match = play_cards_regex.match(line)
         if match:
+            self.assert_current_player(match.group('player'))
             foreach_card(match.group('cards'), lambda card: self.game.play(card))
             return True
             
         # Check for purchased cards
         match = buy_card_regex.match(line)
         if match:
+            self.assert_current_player(match.group('player'))
             self.game.buy(match.group('card'))
             return True
             
@@ -167,7 +231,7 @@ class isotropic_parser:
         match = draw_hand_regex.match(line)
         if match:
             self.game.cleanup()
-            foreach_card(match.group('cards'), lambda card: self.game.draw(card))
+            foreach_card(match.group('cards'), lambda card: self.game.draw(card, match.group('player')))
             return True
             
         # Check for reshuffling
@@ -175,6 +239,81 @@ class isotropic_parser:
         if match:
             self.game.reshuffle(match.group('player'))
             return True
+            
+        # Check for +$
+        match = get_money_regex.match(line)
+        if match:
+            self.game.add_money(int(match.group('money')))
+            return True
+        
+        # Check for +actions
+        match = get_actions_regex.match(line)
+        if match:
+            self.game.add_actions(int(match.group('actions')))
+            return True
+            
+        # Check for +buys
+        match = get_buys_regex.match(line)
+        if match:
+            self.game.add_buys(int(match.group('buys')))
+            return True
+        
+        # Check for drawing cards
+        match = draw_cards_regex.match(line)
+        if match:
+            self.game.draw(int(match.group('cards')), match.group('player'))
+            return True
+        
+        # Check for drawing combined with buys
+        match = draw_cards_get_buys_regex.match(line)
+        if match:
+            self.game.draw(int(match.group('cards')))
+            self.game.add_buys(int(match.group('buys')))
+            return True
+        
+        # Check for discarding cards
+        match = discard_cards_regex.match(line)
+        if match:
+            foreach_card(match.group('cards'), lambda card: self.game.discard(card))
+            return True
+        
+        # Check for gained cards
+        match = gain_cards_regex.match(line)
+        if match:
+            self.game.gain(match.group('card'), match.group('player'))
+            return True
+            
+        # Check for trashed cards
+        match = trash_cards_regex.match(line)
+        if match:
+            foreach_card(match.group('cards'), lambda card: self.game.trash(card))
+            return True
+            
+        # Check for revealing cards (but don't do anything with them)
+        match = reveal_cards_regex.match(line)
+        if match:
+            # This doesn't do anything about the game state
+            return True
+        
+        
+        
+        # Specific cards
+        match = swindler_trash_regex.match(line)
+        if match:
+            self.game.trash(match.group('card'), match.group('player'))
+            return True
+            
+        match = swindler_replace_regex.match(line)
+        if match:
+            # Ignore the old_card group, as it was already trashed
+            self.game.gain(match.group('new_card'), match.group('player'))
+            return True
+            
+        match = fortune_teller_put_cards_on_deck_regex.match(line)
+        if match:
+            # As we did nothing with the revealed cards, do nothing here
+            return True
+            
             
         # Default return
         return False
@@ -352,6 +491,7 @@ class isotropic_parser:
         
     def read_turn_header(self):
         turn_first_line = self.next()
+        print 'Parsing line: {0}'.format(turn_first_line)
         match = turn_header_regex.match(turn_first_line)
         if match:
             player = match.group('player')
@@ -380,6 +520,9 @@ class isotropic_parser:
             print 'Line didn\'t match:\n Line: {0}\n Pattern: {1}'.format(line, regex)
         else:
             print 'Line didn\'t match:\n Line: {0}\n Pattern: {1}'.format(line, regex.pattern)
+            
+    def assert_current_player(self, player):
+        assert self.game.get_player(player) is self.game.get_player(), "Acting player was not expected!"
     
     def next(self):
         return self.file.next().strip()

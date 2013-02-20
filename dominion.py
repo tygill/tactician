@@ -70,13 +70,15 @@ class dominion_player:
         self.game = game
         self.name = name
         # Piles are implemented as a dictionary from card names to how many of them are in the pile
+        # Because drawing doesn't tell us exactly what they drew, this will now just hold the deck.
         self.deck = {}
-        self.discard = {}
-        self.hand = {}
+        #self.discard_pile = {}
+        #self.hand = {}
         # Duration cards, actions/money during turn, etc.
-        self.in_play = {}
+        #self.in_play = {}
         # Island, Haven, Native Villiage, etc.
-        self.out_of_play = {}
+        #self.out_of_play = {}
+        self.cards_in_hand = 0
         
     def set_final_score(self, score):
         self.final_score = score
@@ -84,26 +86,46 @@ class dominion_player:
     # Game State Modifiers
     
     def reshuffle(self):
-        move_cards(self.discard, self.deck)
+        #move_cards(self.discard_pile, self.deck)
+        pass
     
-    def draw(self, card):
+    def draw(self, card = None):
         # Attempt to automatically reshuffle if things aren't quite in sync
         # This will mean that the discard pile is not truly what it is, but it should be close enough
         # for current purposes.
         # TODO: If we choose to include a 'cards in discard pile' or similar feature, this can be made better.
-        if self.deck[card] == 0:
-            self.reshuffle()
-        move_card(self.deck, self.hand, card)
+        #if self.deck[card] == 0:
+        #    self.reshuffle()
+        #move_card(self.deck, self.hand, card)
+        if card is None or type(card) is str:
+            cards = 1
+        else:
+            cards = card
+        self.cards_in_hand += cards
+        
+    def discard(self, card = None):
+        #move_card(self.hand, self.discard_pile, card)
+        if card is None or type(card) is str:
+            cards = 1
+        else:
+            cards = card
+        self.cards_in_hand -= cards
         
     def cleanup(self):
-        move_cards(self.in_play, self.discard) # Yes, this moves duration cards as well, but for out purposes this is fine.
-        move_cards(self.hand, self.discard)
+        #move_cards(self.in_play, self.discard_pile) # Yes, this moves duration cards as well, but for out purposes this is fine.
+        #move_cards(self.hand, self.discard_pile)
+        self.cards_in_hand = 0
         
     def play(self, card):
-        move_card(self.hand, self.in_play, card)
+        #move_card(self.hand, self.in_play, card)
+        self.cards_in_hand -= 1
         
     def gain(self, card):
-        incr_value(self.discard, card)
+        #incr_value(self.discard_pile, card)
+        incr_value(self.deck, card)
+        
+    def trash(self, card):
+        decr_value(self.deck, card)
     
 # This class stores information about the state of a game of dominion
 class dominion_game:
@@ -112,7 +134,7 @@ class dominion_game:
         self.supply = {}
         self.players = {}
         self.num_players = 0
-        self.trash = {}
+        self.trash_pile = {}
         
         # Game meta-data
         self.empty_piles = []
@@ -123,6 +145,8 @@ class dominion_game:
         self.current_player = None
         self.turn_number = 0
         self.money = 0
+        self.actions = 1
+        self.buys = 1
         self.copper_value = 1 # Coppersmith
         self.fools_gold_value = 1 # Fool's Gold
         
@@ -197,6 +221,8 @@ class dominion_game:
             self.turn_number = turn_number
         
         self.money = 0 # Current money
+        self.actions = 1
+        self.buys = 1
         
         self.copper_value = 1 # Coppersmith
         self.fools_gold_value = 1 # Fool's Gold (must be updated when a treasure card is 'played')
@@ -205,6 +231,12 @@ class dominion_game:
     # Treasure cards with variable costs should use this (e.g., Bank, Philosopher's Stone)
     def add_money(self, money):
         self.money += money
+        
+    def add_actions(self, actions = 1):
+        self.actions += actions
+        
+    def add_buys(self, buys = 1):
+        self.buys += buys
     
     # Game Modifiers
     # ----
@@ -213,9 +245,19 @@ class dominion_game:
         self.get_player(player).reshuffle()
     
     # Moves a card from a players deck to their hand (this may not be necessary...)
-    def draw(self, card, player = None):
-        assert_card(card)
+    # Draw and discard can accept either:
+    #  None (implies a single card)
+    #  string (name of a type of card)
+    #  int (number of cards to draw - unknown what they are)
+    def draw(self, card = None, player = None):
+        if type(card) is str:
+            assert_card(card)
         self.get_player(player).draw(card)
+            
+    def discard(self, card = None, player = None):
+        if type(card) is str:
+            assert_card(card)
+        self.get_player(player).discard(card)
         
     def cleanup(self):
         self.get_player().cleanup()
@@ -239,6 +281,10 @@ class dominion_game:
         decr_value(self.supply, card)
         self.get_player(player).gain(card)
         
+    def trash(self, card, player = None):
+        assert_card(card)
+        incr_value(self.trash_pile, card)
+        self.get_player(player).trash(card)
                 
     # Utility methods
     # ---------------
