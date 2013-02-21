@@ -466,16 +466,10 @@ class isotropic_parser:
     def read_turn(self):
         self.read_turn_header()
         
-        line = 'Make sure the loop starts by making this a non-zero length string. It will get reset before it gets parsed anyway.'
+        line = self.next() # Read the next line
         # This loops until an empty line is found (which only occurs at the very end of the document), and then returns false, indicating there is not another turn to be read.
         # Otherwise, this will break out when a <br> has been found, which will cause this to return true.
         while len(line) != 0:
-            line = self.next() # Read the next line
-            
-            # Check to see if the turn is over
-            if br_regex.match(line):
-                return True
-                
             print 'Parsing line: {0}'.format(line)
             
             success = self.read_line(line)
@@ -485,7 +479,13 @@ class isotropic_parser:
                 print
                 print 'Unknown line: {0}'.format(line)
                 print
-                exit(0) # Until a more complete set of parsing is built up, add things in one at a time
+                #exit(0) # Until a more complete set of parsing is built up, add things in one at a time
+            
+            line = self.next() # Read the next line
+            
+            # Check to see if the turn is over
+            if br_regex.match(line):
+                return True
         # There is no more turn to read
         return False
         
