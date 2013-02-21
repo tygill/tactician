@@ -61,7 +61,7 @@ if __name__ == '__main__':
     if not os.path.exists(extraction_dir):
         os.makedirs(extraction_dir)
     
-    start_date = datetime.date(2013, 2, 1)
+    start_date = datetime.date(2013, 1, 1)
     end_date = datetime.date.today()
     time_delta = datetime.timedelta(days=-1)
     cur_date = end_date + time_delta
@@ -75,7 +75,7 @@ if __name__ == '__main__':
             if download:
                 download_file(url, filename_download, filename)
         # Skip extracting files that have been moved to the extracted folder
-        if not os.path.exists(finished_name):
+        if os.path.exists(filename) and not os.path.exists(finished_name):
             if extract:
                 extract_file(filename, finished_name)
         cur_date = cur_date + time_delta
