@@ -9,17 +9,16 @@ namespace MLToolkitCSharp
     {
         private Random m_rand;
         private double m_learningRate;
-        private SigmoidUnit[][] m_hiddenNodes;
-        private SigmoidUnit[] m_outputNodes;
+        private BackpropogationLayer[] m_layers;
+        private int m_numHiddenNodes;
 
         public BackpropogationLearner(double learningRate, int numHiddenLayers, int numHiddenNodes,
             Random rand)
         {
             m_learningRate = learningRate;
             m_rand = rand;
-            m_hiddenNodes = new SigmoidUnit[numHiddenLayers][];
-            for (int i = 0; i < m_hiddenNodes.Length; ++i)
-                m_hiddenNodes[i] = new SigmoidUnit[numHiddenNodes];
+            m_layers = new BackpropogationLayer[numHiddenLayers + 1];
+            m_numHiddenNodes = numHiddenNodes;
         }
 
         public override void train(Matrix features, Matrix labels)
@@ -37,7 +36,7 @@ namespace MLToolkitCSharp
                 throw (new Exception("Expected at least one row"));
             }
 
-            initializeSigmoidUnits(labels.valueCount(0), features.cols());
+            initializeLayers(features.cols(), labels.valueCount(0));
 
             Matrix order = new Matrix();
             order.setSize(features.rows(), 1);
@@ -64,38 +63,38 @@ namespace MLToolkitCSharp
                 for (int i = 0; i < trainOrder.rows(); ++i)
                 {
                     int rowToUse = (int)trainOrder.get(i, 0);
+                    double targetValue = labels.get(rowToUse, 0);
                     double[] inputs = features.row(rowToUse);
                     double[] outputs = getOutputs(inputs);
-                    double[] nextLayerError = new double[m_outputNodes.Length];
-                    for (int j = 0; j < m_outputNodes.Length; ++j)
+                    double[] prevErrors = new double[outputs.Length];
+                    prevErrors[(int)targetValue] = 1;
+                    for (int j = 0; j < prevErrors.Length; ++j)
                     {
-                        double targetValue = labels.get(rowToUse, 0);
-                        double output = m_outputNodes[j].predict(inputs);
-                        nextLayerError[j] = (targetValue - output) * output * (1 - output);
-                        //This is using the wrong inputs. We need the inputs from the hidden layer before this.
-                        m_outputNodes[j].updateWeights(inputs, nextLayerError[j]);
+                        prevErrors[j] -= outputs[j];
+                        prevErrors[j] *= outputs[j] * (1 - outputs[j]);
                     }
-                    for (int hidLyr = m_hiddenNodes.Length - 1; hidLyr >= 0; --hidLyr)
+                    int prev = m_layers.Length - 1;
+                    int cur = prev - 1;
+
+                    while (cur >= 0)
                     {
-                        double[] thisLayerError = new double[m_hiddenNodes[hidLyr].Length];
-                        for (int k = 0; k < m_hiddenNodes[hidLyr].Length; ++k)
+                        double[] curErrors = new double[m_layers[cur].NumNodes];
+                        outputs = m_layers[cur].getLastPrediction();
+                        for (int j = 0; j < curErrors.Length; ++j)
                         {
-                            double error = 0;
-                            for (int h = 0; h < nextLayerError.Length; ++h)
-                            {
-                                SigmoidUnit nodeh;
-                                if (hidLyr == m_hiddenNodes.Length - 1)
-                                    nodeh = m_outputNodes[h];
-                                else
-                                    nodeh = m_hiddenNodes[hidLyr + 1][h];
-                                error += nodeh.Weights[k] * nextLayerError[h];
-                            }
-                            //error *= 
+                            curErrors[j] = 0;
+                            for (int k = 0; k < prevErrors.Length; ++k)
+                                curErrors[j] += m_layers[prev].getWeight(j, k) * prevErrors[k];
+                            curErrors[j] *= outputs[j] * (1 - outputs[j]);
                         }
+                        m_layers[prev--].updateWeights(outputs, prevErrors);
+                        prevErrors = curErrors;
+                        cur--;
                     }
+                    m_layers[prev].updateWeights(inputs, prevErrors);
                 }
                 epochCount++;
-                double newAccuracy = measureAccuracy(features, labels, new Matrix());
+                double newAccuracy = measureAccuracy(validationFeatures, validationLabels, new Matrix());
                 if (newAccuracy - accuracy < 0.1)
                     steadyEpochs++;
                 else
@@ -104,39 +103,24 @@ namespace MLToolkitCSharp
             }
         }
 
-        private void initializeSigmoidUnits(int numInputs, int numOutputs)
+        private void initializeLayers(int numInputs, int numOutputs)
         {
-            for (int j = 0; j < m_hiddenNodes[0].Length; ++j)
-                m_hiddenNodes[0][j] = new SigmoidUnit(m_rand, numInputs, m_learningRate);
-
-            int numHiddenInputs = m_hiddenNodes[0].Length;
-            for (int i = 1; i < m_hiddenNodes.Length; ++i)
+            if (m_layers.Length > 1)
             {
-                numHiddenInputs = m_hiddenNodes[i - 1].Length;
-                for (int j = 0; j < m_hiddenNodes[i].Length; ++j)
-                    m_hiddenNodes[i][j] = new SigmoidUnit(m_rand, numHiddenInputs, m_learningRate);
+                m_layers[0] = new BackpropogationLayer(m_rand, m_numHiddenNodes, numInputs, m_learningRate);
+                for (int i = 1; i < m_layers.Length - 1; ++i)
+                    m_layers[i] = new BackpropogationLayer(m_rand, m_numHiddenNodes, m_numHiddenNodes, m_learningRate);
+                m_layers[m_layers.Length - 1] = new BackpropogationLayer(m_rand, numOutputs, m_numHiddenNodes, m_learningRate);
             }
-
-            m_outputNodes = new SigmoidUnit[numOutputs];
-            for (int i = 0; i < m_outputNodes.Length; ++i)
-                m_outputNodes[i] = new SigmoidUnit(m_rand, numHiddenInputs, m_learningRate);
+            else
+                m_layers[0] = new BackpropogationLayer(m_rand, numOutputs, numInputs, m_learningRate);
         }
 
         private double[] getOutputs(double[] features)
         {
-            double[] prevLayerOutput = new double[m_hiddenNodes[0].Length];
-            for (int i = 0; i < m_hiddenNodes[0].Length; ++i)
-                prevLayerOutput[i] = m_hiddenNodes[0][i].predict(features);
-            for (int i = 1; i < m_hiddenNodes.Length; ++i)
-            {
-                double[] thisLayerOutput = new double[m_hiddenNodes[i].Length];
-                for (int j = 0; j < m_hiddenNodes[i].Length; ++j)
-                    thisLayerOutput[j] = m_hiddenNodes[i][j].predict(prevLayerOutput);
-                prevLayerOutput = thisLayerOutput;
-            }
-            double[] outputs = new double[m_outputNodes.Length];
-            for (int i = 0; i < m_outputNodes.Length; ++i)
-                outputs[i] = m_outputNodes[i].predict(prevLayerOutput);
+            double[] outputs = m_layers[0].predict(features);
+            for (int i = 1; i < m_layers.Length; ++i)
+                outputs = m_layers[i].predict(outputs);
             return outputs;
         }
 

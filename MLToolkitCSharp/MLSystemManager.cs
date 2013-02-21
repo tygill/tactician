@@ -28,11 +28,11 @@ namespace MLToolkitCSharp
             {
                 return new PerceptronLearner(learningRate, rand, outFile);
             }
-            /*
             else if (model.Equals("neuralnet", StringComparison.OrdinalIgnoreCase))
             {
-                return new NeuralNet(rand);
+                return new BackpropogationLearner(learningRate, 1, 8, rand);
             }
+            /*
             else if (model.Equals("decisiontree", StringComparison.OrdinalIgnoreCase))
             {
                 return new DecisionTree();
@@ -249,7 +249,7 @@ namespace MLToolkitCSharp
                         else if (argv[i].Equals("-L"))
                         {
                             Learner = argv[++i];
-                            if (Learner.Equals("perceptron"))
+                            if (Learner.Equals("perceptron") || Learner.Equals("neuralnet"))
                             {
                                 LearningRate = double.Parse(argv[++i]);
                             }
