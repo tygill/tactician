@@ -10,6 +10,11 @@ victory_cards = set()
 treasure_cards = set()
 curse_cards = set()
 
+victory_point_symbol = unichr(9660)
+
+def get_victory_symbol():
+    return victory_point_symbol
+
 # This does not check plural cards - the card must be sanitized if its plural
 def is_card(card):
     return card in cards
@@ -49,7 +54,7 @@ def decr_value(map, val):
     if val in map:
         map[val] -= 1
     else:
-        assert False, "Decrementing card pile that doesn't exist"
+        assert False, 'Decrementing card pile that doesn\'t exist: {0}'.format(val)
     
 def move_card(a, b, card):
     decr_value(a, card)
@@ -97,7 +102,7 @@ class dominion_player:
         #if self.deck[card] == 0:
         #    self.reshuffle()
         #move_card(self.deck, self.hand, card)
-        if card is None or type(card) is str:
+        if card is None or isinstance(card, basestring):
             cards = 1
         else:
             cards = card
@@ -105,7 +110,7 @@ class dominion_player:
         
     def discard(self, card = None):
         #move_card(self.hand, self.discard_pile, card)
-        if card is None or type(card) is str:
+        if card is None or isinstance(card, basestring):
             cards = 1
         else:
             cards = card
@@ -147,6 +152,8 @@ class dominion_game:
         self.money = 0
         self.actions = 1
         self.buys = 1
+        self.cards_gained = []
+        self.cards_bought = []
         self.copper_value = 1 # Coppersmith
         self.fools_gold_value = 1 # Fool's Gold
         
@@ -224,6 +231,9 @@ class dominion_game:
         self.actions = 1
         self.buys = 1
         
+        del self.cards_gained[:]
+        del self.cards_bought[:]
+        
         self.copper_value = 1 # Coppersmith
         self.fools_gold_value = 1 # Fool's Gold (must be updated when a treasure card is 'played')
     
@@ -250,12 +260,12 @@ class dominion_game:
     #  string (name of a type of card)
     #  int (number of cards to draw - unknown what they are)
     def draw(self, card = None, player = None):
-        if type(card) is str:
+        if isinstance(card, basestring):
             assert_card(card)
         self.get_player(player).draw(card)
             
     def discard(self, card = None, player = None):
-        if type(card) is str:
+        if isinstance(card, basestring):
             assert_card(card)
         self.get_player(player).discard(card)
         
@@ -273,11 +283,13 @@ class dominion_game:
     def buy(self, card):
         assert_card(card)
         # TODO: Should this decrement the available money based on the cost of the card bought?
+        self.cards_bought.append(card)
         self.gain(card)
     
     # Gives a card from the supply to a player
     def gain(self, card, player = None):
         assert_card(card)
+        self.cards_gained.append(card)
         decr_value(self.supply, card)
         self.get_player(player).gain(card)
         
@@ -295,7 +307,7 @@ class dominion_game:
     def get_player(self, player = None):
         if player is None:
             return self.players[self.current_player]
-        elif type(player) is str:
+        elif isinstance(player, basestring):
             return self.players[player]
         else:
             # Otherwise, assume its the actual player object
