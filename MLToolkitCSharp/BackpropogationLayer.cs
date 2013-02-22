@@ -36,10 +36,10 @@ namespace MLToolkitCSharp
             return m_lastPrediction;
         }
 
-        public void updateWeights(double[] inputs, double[] errors)
+        public void updateWeights(double[] inputs, double[] errors, double momentum = 0)
         {
             for (int i = 0; i < m_nodes.Length; ++i)
-                m_nodes[i].updateWeights(inputs, errors[i]);
+                m_nodes[i].updateWeights(inputs, errors[i], momentum);
         }
 
         // Get the weight for the ith input going into node j.

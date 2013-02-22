@@ -18,7 +18,8 @@ namespace MLToolkitCSharp
         /**
          *  When you make a new learning algorithm, you should add a line for it to this method.
          */
-        public SupervisedLearner getLearner(string model, double learningRate, Random rand, System.IO.StreamWriter outFile)
+        public SupervisedLearner getLearner(string model, double learningRate, double momentum,
+            Random rand, System.IO.StreamWriter outFile)
         {
             if (model.Equals("baseline", StringComparison.OrdinalIgnoreCase))
             {
@@ -30,7 +31,7 @@ namespace MLToolkitCSharp
             }
             else if (model.Equals("neuralnet", StringComparison.OrdinalIgnoreCase))
             {
-                return new BackpropogationLearner(learningRate, 1, 8, rand);
+                return new BackpropogationLearner(learningRate, 1, 8, rand, momentum);
             }
             /*
             else if (model.Equals("decisiontree", StringComparison.OrdinalIgnoreCase))
@@ -67,7 +68,8 @@ namespace MLToolkitCSharp
                 outFile = new System.IO.StreamWriter(parser.OutFile);
 
             // Load the model
-            SupervisedLearner learner = getLearner(parser.Learner, parser.LearningRate, rand, outFile);
+            SupervisedLearner learner = getLearner(parser.Learner, parser.LearningRate, parser.Momentum,
+                rand, outFile);
 
             // Load the ARFF file
             Matrix data = new Matrix();
@@ -253,6 +255,10 @@ namespace MLToolkitCSharp
                             {
                                 LearningRate = double.Parse(argv[++i]);
                             }
+                            if (Learner.Equals("neuralnet"))
+                            {
+                                Momentum = double.Parse(argv[++i]);
+                            }
                         }
                         else if (argv[i].Equals("-E"))
                         {
@@ -325,6 +331,7 @@ namespace MLToolkitCSharp
             public string ARFF { private set; get; }
             public string Learner { private set; get; }
             public double LearningRate { private set; get; }
+            public double Momentum { private set; get; }
             public string Evaluation { private set; get; }
             public string EvalParameter { private set; get; }
             public bool Verbose { private set; get; }

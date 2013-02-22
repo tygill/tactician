@@ -11,14 +11,16 @@ namespace MLToolkitCSharp
         private double m_learningRate;
         private BackpropogationLayer[] m_layers;
         private int m_numHiddenNodes;
+        private double m_momentum;
 
         public BackpropogationLearner(double learningRate, int numHiddenLayers, int numHiddenNodes,
-            Random rand)
+            Random rand, double momentum = 0)
         {
             m_learningRate = learningRate;
             m_rand = rand;
             m_layers = new BackpropogationLayer[numHiddenLayers + 1];
             m_numHiddenNodes = numHiddenNodes;
+            m_momentum = momentum;
         }
 
         public override void train(Matrix features, Matrix labels)
@@ -87,11 +89,11 @@ namespace MLToolkitCSharp
                                 curErrors[j] += m_layers[prev].getWeight(j, k) * prevErrors[k];
                             curErrors[j] *= outputs[j] * (1 - outputs[j]);
                         }
-                        m_layers[prev--].updateWeights(outputs, prevErrors);
+                        m_layers[prev--].updateWeights(outputs, prevErrors, m_momentum);
                         prevErrors = curErrors;
                         cur--;
                     }
-                    m_layers[prev].updateWeights(inputs, prevErrors);
+                    m_layers[prev].updateWeights(inputs, prevErrors, m_momentum);
                 }
                 epochCount++;
                 double newAccuracy = measureAccuracy(validationFeatures, validationLabels, new Matrix());
@@ -101,6 +103,7 @@ namespace MLToolkitCSharp
                     steadyEpochs = 0;
                 accuracy = newAccuracy;
             }
+            Console.WriteLine("Training took " + epochCount + " epochs.");
         }
 
         private void initializeLayers(int numInputs, int numOutputs)
