@@ -41,8 +41,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="BackpropogationLayer.cs" />
-    <Compile Include="BackpropogationLearner.cs" />
+    <Compile Include="BackpropagationLayer.cs" />
+    <Compile Include="BackpropagationLearner.cs" />
     <Compile Include="BaselineLearner.cs" />
     <Compile Include="IThresholder.cs" />
     <Compile Include="LinearUnit.cs" />

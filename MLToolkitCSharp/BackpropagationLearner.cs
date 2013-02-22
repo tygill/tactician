@@ -5,20 +5,20 @@ using System.Text;
 
 namespace MLToolkitCSharp
 {
-    class BackpropogationLearner : SupervisedLearner
+    class BackpropagationLearner : SupervisedLearner
     {
         private Random m_rand;
         private double m_learningRate;
-        private BackpropogationLayer[] m_layers;
+        private BackpropagationLayer[] m_layers;
         private int m_numHiddenNodes;
         private double m_momentum;
 
-        public BackpropogationLearner(double learningRate, int numHiddenLayers, int numHiddenNodes,
+        public BackpropagationLearner(double learningRate, int numHiddenLayers, int numHiddenNodes,
             Random rand, double momentum = 0)
         {
             m_learningRate = learningRate;
             m_rand = rand;
-            m_layers = new BackpropogationLayer[numHiddenLayers + 1];
+            m_layers = new BackpropagationLayer[numHiddenLayers + 1];
             m_numHiddenNodes = numHiddenNodes;
             m_momentum = momentum;
         }
@@ -110,13 +110,13 @@ namespace MLToolkitCSharp
         {
             if (m_layers.Length > 1)
             {
-                m_layers[0] = new BackpropogationLayer(m_rand, m_numHiddenNodes, numInputs, m_learningRate);
+                m_layers[0] = new BackpropagationLayer(m_rand, m_numHiddenNodes, numInputs, m_learningRate);
                 for (int i = 1; i < m_layers.Length - 1; ++i)
-                    m_layers[i] = new BackpropogationLayer(m_rand, m_numHiddenNodes, m_numHiddenNodes, m_learningRate);
-                m_layers[m_layers.Length - 1] = new BackpropogationLayer(m_rand, numOutputs, m_numHiddenNodes, m_learningRate);
+                    m_layers[i] = new BackpropagationLayer(m_rand, m_numHiddenNodes, m_numHiddenNodes, m_learningRate);
+                m_layers[m_layers.Length - 1] = new BackpropagationLayer(m_rand, numOutputs, m_numHiddenNodes, m_learningRate);
             }
             else
-                m_layers[0] = new BackpropogationLayer(m_rand, numOutputs, numInputs, m_learningRate);
+                m_layers[0] = new BackpropagationLayer(m_rand, numOutputs, numInputs, m_learningRate);
         }
 
         private double[] getOutputs(double[] features)

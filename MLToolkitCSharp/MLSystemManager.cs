@@ -31,7 +31,7 @@ namespace MLToolkitCSharp
             }
             else if (model.Equals("neuralnet", StringComparison.OrdinalIgnoreCase))
             {
-                return new BackpropogationLearner(learningRate, 1, 8, rand, momentum);
+                return new BackpropagationLearner(learningRate, 1, 8, rand, momentum);
             }
             /*
             else if (model.Equals("decisiontree", StringComparison.OrdinalIgnoreCase))

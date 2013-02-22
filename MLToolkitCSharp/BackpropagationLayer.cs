@@ -5,14 +5,14 @@ using System.Text;
 
 namespace MLToolkitCSharp
 {
-    class BackpropogationLayer
+    class BackpropagationLayer
     {
         public int NumInputs { private set; get; }
         public int NumNodes { private set; get; }
         private SigmoidUnit[] m_nodes;
         private double[] m_lastPrediction;
 
-        public BackpropogationLayer(Random rand, int numNodes, int numInputs, double learningRate)
+        public BackpropagationLayer(Random rand, int numNodes, int numInputs, double learningRate)
         {
             NumNodes = numNodes;
             NumInputs = numInputs;
