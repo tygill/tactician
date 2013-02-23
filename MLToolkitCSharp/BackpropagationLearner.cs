@@ -13,23 +13,23 @@ namespace MLToolkitCSharp
         private BackpropagationLayer[] m_layers;
         private int m_numHiddenNodes;
         private double m_momentum;
-        private StreamWriter m_outFile;
+        private Plotter m_plotter;
 
-        public BackpropagationLearner(double learningRate, int numHiddenLayers, Random rand, StreamWriter outFile,
-            double momentum = 0)
-            : this(learningRate, numHiddenLayers, -1, rand, outFile, momentum)
+        public BackpropagationLearner(double learningRate, int numHiddenLayers, Random rand,
+            Plotter plotter, double momentum = 0)
+            : this(learningRate, numHiddenLayers, -1, rand, plotter, momentum)
         {
         }
 
         public BackpropagationLearner(double learningRate, int numHiddenLayers, int numHiddenNodes,
-            Random rand, StreamWriter outFile, double momentum = 0)
+            Random rand, Plotter plotter, double momentum = 0)
         {
             m_learningRate = learningRate;
             m_rand = rand;
             m_layers = new BackpropagationLayer[numHiddenLayers + 1];
             m_numHiddenNodes = numHiddenNodes;
             m_momentum = momentum;
-            m_outFile = outFile;
+            m_plotter = plotter;
         }
 
         public override void train(Matrix features, Matrix labels)
@@ -65,19 +65,22 @@ namespace MLToolkitCSharp
                 validationLabels.add(labels, (int)order.get(i, 0), 0, 1);
             }
 
-            if (m_outFile != null)
-            {
-                m_outFile.WriteLine("set term wxt 0\nunset key");
-                m_outFile.WriteLine("set yrange [0: 1]");
-                m_outFile.WriteLine("set title \"Misclassification Rate vs. Epochs\"");
-                m_outFile.WriteLine("set xlabel \"Epochs Completed\"");
-                m_outFile.WriteLine("set ylabel \"Misclassification Rate\"");
-                m_outFile.WriteLine("plot '-' with line lt 3");
-            }
 
             int steadyEpochs = 0;
             int epochCount = 0;
             double accuracy = measureAccuracy(validationFeatures, validationLabels, new Matrix());
+            Plot misclassificationPlot = null;
+            if (m_plotter != null)
+            {
+                misclassificationPlot = new Plot("Misclassification Rate vs. Epochs");
+                misclassificationPlot.XLabel = "Epochs Completed";
+                misclassificationPlot.XMin = 0;
+                misclassificationPlot.YLabel = "Misclassification Rate";
+                misclassificationPlot.YMin = 0;
+                misclassificationPlot.YMax = 1;
+                misclassificationPlot.addDataPoint(epochCount, 1 - accuracy);
+                m_plotter.addPlot(misclassificationPlot);
+            }
             while (steadyEpochs < 50)
             {
                 trainOrder.shuffle(m_rand);
@@ -120,16 +123,13 @@ namespace MLToolkitCSharp
                     steadyEpochs++;
                 else
                     steadyEpochs = 0;
-                if (m_outFile != null)
-                {
-                    m_outFile.WriteLine((epochCount - 1) + ", " + (1 - accuracy)
-                        + " " + epochCount + ", " + (1 - newAccuracy));
-                }
                 accuracy = newAccuracy;
+                if (misclassificationPlot != null)
+                    misclassificationPlot.addDataPoint(epochCount, 1 - accuracy);
             }
             Console.WriteLine("Training took " + epochCount + " epochs.");
-            if (m_outFile != null)
-                m_outFile.WriteLine("e");
+            if (misclassificationPlot != null)
+                misclassificationPlot.XMax = epochCount;
         }
 
         private void initializeLayers(int numInputs, int numOutputs)

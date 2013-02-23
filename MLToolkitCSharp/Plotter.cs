@@ -6,14 +6,14 @@ using System.Text;
 
 namespace MLToolkitCSharp
 {
-    class Plotter
+    public class Plotter
     {
         private StreamWriter m_outFile;
         private List<Plot> m_plots;
 
         public Plotter(string filename)
         {
-            m_outFile = new System.IO.StreamWriter(filename);
+            m_outFile = new StreamWriter(filename);
             m_plots = new List<Plot>();
         }
 
@@ -26,8 +26,11 @@ namespace MLToolkitCSharp
         {
             for (int i = 0; i < m_plots.Count; ++i)
             {
-                m_outFile.WriteLine("set term wxt " + i);
-                m_plots[i].print(m_outFile);
+                using (m_outFile)
+                {
+                    m_outFile.WriteLine("set term wxt " + i);
+                    m_plots[i].print(m_outFile);
+                }
             }
         }
     }

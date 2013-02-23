@@ -19,7 +19,7 @@ namespace MLToolkitCSharp
          *  When you make a new learning algorithm, you should add a line for it to this method.
          */
         public SupervisedLearner getLearner(string model, double learningRate, double momentum,
-            Random rand, System.IO.StreamWriter outFile)
+            Random rand, Plotter plotter)
         {
             if (model.Equals("baseline", StringComparison.OrdinalIgnoreCase))
             {
@@ -27,11 +27,11 @@ namespace MLToolkitCSharp
             }
             else if (model.Equals("perceptron", StringComparison.OrdinalIgnoreCase))
             {
-                return new PerceptronLearner(learningRate, rand, outFile);
+                return new PerceptronLearner(learningRate, rand, plotter);
             }
             else if (model.Equals("neuralnet", StringComparison.OrdinalIgnoreCase))
             {
-                return new BackpropagationLearner(learningRate, 1, rand, outFile, momentum);
+                return new BackpropagationLearner(learningRate, 1, rand, plotter, momentum);
             }
             /*
             else if (model.Equals("decisiontree", StringComparison.OrdinalIgnoreCase))
@@ -63,13 +63,13 @@ namespace MLToolkitCSharp
             }
 
 
-            System.IO.StreamWriter outFile = null;
+            Plotter plotter = null;
             if (parser.OutFile != null)
-                outFile = new System.IO.StreamWriter(parser.OutFile);
+                plotter = new Plotter(parser.OutFile);
 
             // Load the model
             SupervisedLearner learner = getLearner(parser.Learner, parser.LearningRate, parser.Momentum,
-                rand, outFile);
+                rand, plotter);
 
             // Load the ARFF file
             Matrix data = new Matrix();
@@ -216,10 +216,8 @@ namespace MLToolkitCSharp
                 Console.WriteLine("Mean accuracy=" + (sumAccuracy / (reps * folds)));
             }
 
-            if (outFile != null)
-            {
-                outFile.Dispose();
-            }
+            if (plotter != null)
+                plotter.printPlots();
         }
 
         /**

@@ -10,13 +10,13 @@ namespace MLToolkitCSharp
         private Perceptron[] m_perceptrons;
         private Random m_rand;
         private double m_learningRate;
-        private System.IO.StreamWriter m_outFile;
+        private Plotter m_plotter;
 
-        public PerceptronLearner(double learningRate, Random rand, System.IO.StreamWriter outFile)
+        public PerceptronLearner(double learningRate, Random rand, Plotter plotter)
         {
             m_rand = rand;
             m_learningRate = learningRate;
-            m_outFile = outFile;
+            m_plotter = plotter;
         }
 
         public override void train(Matrix features, Matrix labels)
@@ -57,19 +57,20 @@ namespace MLToolkitCSharp
             for (int i = 0; i < order.rows(); ++i)
                 order.set(i, 0, i);
 
-            if (m_outFile != null && plotMisclassificationRate)
-            {
-                m_outFile.WriteLine("set term wxt 0\nunset key");
-                m_outFile.WriteLine("set yrange [0: 1]");
-                m_outFile.WriteLine("set title \"Misclassification Rate vs. Epochs\"");
-                m_outFile.WriteLine("set xlabel \"Epochs Completed\"");
-                m_outFile.WriteLine("set ylabel \"Misclassification Rate\"");
-                m_outFile.WriteLine("plot '-' with line lt 3");
-            }
-
             int steadyEpochs = 0;
             int epochCount = 0;
             double accuracy = measureAccuracy(features, labels, new Matrix());
+            Plot misclassificationPlot = null;
+            if (m_plotter != null && plotMisclassificationRate)
+            {
+                misclassificationPlot = new Plot("Misclassification Rate vs. Epochs");
+                misclassificationPlot.XLabel = "Epochs Completed";
+                misclassificationPlot.YLabel = "Misclassification Rate";
+                misclassificationPlot.YMin = 0;
+                misclassificationPlot.YMax = 1;
+                misclassificationPlot.addDataPoint(epochCount, 1 - accuracy);
+                m_plotter.addPlot(misclassificationPlot);
+            }
             while (steadyEpochs < 10)
             {
                 order.shuffle(m_rand);
@@ -97,12 +98,9 @@ namespace MLToolkitCSharp
                     steadyEpochs++;
                 else
                     steadyEpochs = 0;
-                if (m_outFile != null && plotMisclassificationRate)
-                {
-                    m_outFile.WriteLine((epochCount - 1) + ", " + (1 - accuracy)
-                        + " " + epochCount + ", " + (1 - newAccuracy));
-                }
                 accuracy = newAccuracy;
+                if (misclassificationPlot != null && plotMisclassificationRate)
+                    misclassificationPlot.addDataPoint(epochCount, 1 - accuracy);
             }
             Console.WriteLine("Training took " + epochCount + " epochs.");
             for (int j = 0; j < m_perceptrons.Length; ++j)
@@ -113,10 +111,9 @@ namespace MLToolkitCSharp
                 Console.WriteLine("\tBias Weight: " + m_perceptrons[j].Weights[features.cols()]);
             }
 
+            /*
             if (m_outFile != null)
             {
-                if (plotMisclassificationRate)
-                    m_outFile.WriteLine("e");
                 if (plotDecisionLineWithInstances)
                 {
                     m_outFile.WriteLine("set term wxt 1");
@@ -145,6 +142,7 @@ namespace MLToolkitCSharp
                     m_outFile.WriteLine("unset multiplot");
                 }
             }
+            */
         }
 
         public override void predict(double[] features, double[] labels)
