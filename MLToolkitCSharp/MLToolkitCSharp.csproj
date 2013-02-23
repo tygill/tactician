@@ -50,6 +50,8 @@
     <Compile Include="MLSystemManager.cs" />
     <Compile Include="Perceptron.cs" />
     <Compile Include="PerceptronLearner.cs" />
+    <Compile Include="Plot.cs" />
+    <Compile Include="Plotter.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SigmoidUnit.cs" />
     <Compile Include="SupervisedLearner.cs" />
