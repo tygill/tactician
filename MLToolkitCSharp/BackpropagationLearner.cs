@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -12,15 +13,23 @@ namespace MLToolkitCSharp
         private BackpropagationLayer[] m_layers;
         private int m_numHiddenNodes;
         private double m_momentum;
+        private StreamWriter m_outFile;
+
+        public BackpropagationLearner(double learningRate, int numHiddenLayers, Random rand, StreamWriter outFile,
+            double momentum = 0)
+            : this(learningRate, numHiddenLayers, -1, rand, outFile, momentum)
+        {
+        }
 
         public BackpropagationLearner(double learningRate, int numHiddenLayers, int numHiddenNodes,
-            Random rand, double momentum = 0)
+            Random rand, StreamWriter outFile, double momentum = 0)
         {
             m_learningRate = learningRate;
             m_rand = rand;
             m_layers = new BackpropagationLayer[numHiddenLayers + 1];
             m_numHiddenNodes = numHiddenNodes;
             m_momentum = momentum;
+            m_outFile = outFile;
         }
 
         public override void train(Matrix features, Matrix labels)
@@ -56,10 +65,20 @@ namespace MLToolkitCSharp
                 validationLabels.add(labels, (int)order.get(i, 0), 0, 1);
             }
 
+            if (m_outFile != null)
+            {
+                m_outFile.WriteLine("set term wxt 0\nunset key");
+                m_outFile.WriteLine("set yrange [0: 1]");
+                m_outFile.WriteLine("set title \"Misclassification Rate vs. Epochs\"");
+                m_outFile.WriteLine("set xlabel \"Epochs Completed\"");
+                m_outFile.WriteLine("set ylabel \"Misclassification Rate\"");
+                m_outFile.WriteLine("plot '-' with line lt 3");
+            }
+
             int steadyEpochs = 0;
             int epochCount = 0;
             double accuracy = measureAccuracy(validationFeatures, validationLabels, new Matrix());
-            while (steadyEpochs < 20)
+            while (steadyEpochs < 50)
             {
                 trainOrder.shuffle(m_rand);
                 for (int i = 0; i < trainOrder.rows(); ++i)
@@ -101,15 +120,24 @@ namespace MLToolkitCSharp
                     steadyEpochs++;
                 else
                     steadyEpochs = 0;
+                if (m_outFile != null)
+                {
+                    m_outFile.WriteLine((epochCount - 1) + ", " + (1 - accuracy)
+                        + " " + epochCount + ", " + (1 - newAccuracy));
+                }
                 accuracy = newAccuracy;
             }
             Console.WriteLine("Training took " + epochCount + " epochs.");
+            if (m_outFile != null)
+                m_outFile.WriteLine("e");
         }
 
         private void initializeLayers(int numInputs, int numOutputs)
         {
             if (m_layers.Length > 1)
             {
+                if (m_numHiddenNodes == -1)
+                    m_numHiddenNodes = numInputs * 2;
                 m_layers[0] = new BackpropagationLayer(m_rand, m_numHiddenNodes, numInputs, m_learningRate);
                 for (int i = 1; i < m_layers.Length - 1; ++i)
                     m_layers[i] = new BackpropagationLayer(m_rand, m_numHiddenNodes, m_numHiddenNodes, m_learningRate);
