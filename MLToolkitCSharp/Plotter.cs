@@ -24,9 +24,9 @@ namespace MLToolkitCSharp
 
         public void printPlots()
         {
-            for (int i = 0; i < m_plots.Count; ++i)
+            using (m_outFile)
             {
-                using (m_outFile)
+                for (int i = 0; i < m_plots.Count; ++i)
                 {
                     m_outFile.WriteLine("set term wxt " + i);
                     m_plots[i].print(m_outFile);

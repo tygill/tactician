@@ -81,6 +81,16 @@ namespace MLToolkitCSharp
                 misclassificationPlot.addDataPoint(epochCount, 1 - accuracy);
                 m_plotter.addPlot(misclassificationPlot);
             }
+            Plot msePlot = null;
+            if (m_plotter != null)
+            {
+                msePlot = new Plot("Mean Squared Error vs. Epochs");
+                msePlot.XLabel = "Epochs Completed";
+                msePlot.XMin = 0;
+                msePlot.YLabel = "MSE";
+                msePlot.addDataPoint(epochCount, calculateMeanSquaredError(validationFeatures, validationLabels));
+                m_plotter.addPlot(msePlot);
+            }
             while (steadyEpochs < 50)
             {
                 trainOrder.shuffle(m_rand);
@@ -126,10 +136,14 @@ namespace MLToolkitCSharp
                 accuracy = newAccuracy;
                 if (misclassificationPlot != null)
                     misclassificationPlot.addDataPoint(epochCount, 1 - accuracy);
+                if (msePlot != null)
+                    msePlot.addDataPoint(epochCount, calculateMeanSquaredError(validationFeatures, validationLabels));
             }
             Console.WriteLine("Training took " + epochCount + " epochs.");
             if (misclassificationPlot != null)
                 misclassificationPlot.XMax = epochCount;
+            if (msePlot != null)
+                msePlot.XMax = epochCount;
         }
 
         private void initializeLayers(int numInputs, int numOutputs)
@@ -169,6 +183,30 @@ namespace MLToolkitCSharp
                     max = i;
 
             labels[0] = max;
+        }
+
+        private double[] calculateErrors(double[] outputs, double targetValue)
+        {
+            double[] errors = new double[outputs.Length];
+            errors[(int)targetValue] = 1;
+            for (int j = 0; j < errors.Length; ++j)
+                errors[j] -= outputs[j];
+            return errors;
+        }
+
+        private double calculateMeanSquaredError(Matrix features, Matrix labels)
+        {
+            double[] pred = new double[1];
+            double sse = 0.0;
+            for (int i = 0; i < features.rows(); i++)
+            {
+                double targetValue = labels.get(i, 0);
+                double[] outputs = getOutputs(features.row(i));
+                double[] errors = calculateErrors(outputs, targetValue);
+                for (int j = 0; j < errors.Length; ++j)
+                    sse += (errors[j] * errors[j]);
+            }
+            return sse / features.rows();
         }
     }
 }
