@@ -8,12 +8,12 @@ namespace MLToolkitCSharp
 {
     public class Plotter
     {
-        private StreamWriter m_outFile;
+        private string m_filename;
         private List<Plot> m_plots;
 
         public Plotter(string filename)
         {
-            m_outFile = new StreamWriter(filename);
+            m_filename = filename;
             m_plots = new List<Plot>();
         }
 
@@ -24,12 +24,12 @@ namespace MLToolkitCSharp
 
         public void printPlots()
         {
-            using (m_outFile)
+            using (StreamWriter outFile = new StreamWriter(m_filename))
             {
                 for (int i = 0; i < m_plots.Count; ++i)
                 {
-                    m_outFile.WriteLine("set term wxt " + i);
-                    m_plots[i].print(m_outFile);
+                    outFile.WriteLine("set term wxt " + i);
+                    m_plots[i].print(outFile);
                 }
             }
         }
