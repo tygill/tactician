@@ -131,6 +131,14 @@ namespace MLToolkitCSharp
                                 // so hopefully this is justified.
                                 t.MoveNext();
                                 string attributeName = t.Current;
+                                if (line.Contains("'"))
+                                {
+                                    string[] tokens2 = line.Split('\'');
+                                    t = tokens2.AsEnumerable<string>().GetEnumerator();
+                                    t.MoveNext();
+                                    t.MoveNext();
+                                    attributeName = "'" + t.Current + "'";
+                                }
                                 m_attr_name.Add(attributeName);
 
                                 int vals = 0;
