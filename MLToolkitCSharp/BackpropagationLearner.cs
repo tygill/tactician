@@ -69,10 +69,22 @@ namespace MLToolkitCSharp
             int steadyEpochs = 0;
             int epochCount = 0;
             double accuracy = measureAccuracy(validationFeatures, validationLabels, new Matrix());
+            Plot trainMisclassPlot = null;
+            if (m_plotter != null)
+            {
+                trainMisclassPlot = new Plot("Training Set Misclassification Rate vs. Epochs");
+                trainMisclassPlot.XLabel = "Epochs Completed";
+                trainMisclassPlot.XMin = 0;
+                trainMisclassPlot.YLabel = "Misclassification Rate";
+                trainMisclassPlot.YMin = 0;
+                trainMisclassPlot.YMax = 1;
+                trainMisclassPlot.addDataPoint(epochCount, 1 - accuracy);
+                m_plotter.addPlot(trainMisclassPlot);
+            }
             Plot misclassificationPlot = null;
             if (m_plotter != null)
             {
-                misclassificationPlot = new Plot("Misclassification Rate vs. Epochs");
+                misclassificationPlot = new Plot("Validation Set Misclassification Rate vs. Epochs");
                 misclassificationPlot.XLabel = "Epochs Completed";
                 misclassificationPlot.XMin = 0;
                 misclassificationPlot.YLabel = "Misclassification Rate";
@@ -138,12 +150,17 @@ namespace MLToolkitCSharp
                     misclassificationPlot.addDataPoint(epochCount, 1 - accuracy);
                 if (msePlot != null)
                     msePlot.addDataPoint(epochCount, calculateMeanSquaredError(validationFeatures, validationLabels));
+                if (trainMisclassPlot != null)
+                    trainMisclassPlot.addDataPoint(epochCount, 1 - measureAccuracy(features, labels, null));
+
             }
             Console.WriteLine("Training took " + epochCount + " epochs.");
             if (misclassificationPlot != null)
                 misclassificationPlot.XMax = epochCount;
             if (msePlot != null)
                 msePlot.XMax = epochCount;
+            if (trainMisclassPlot != null)
+                trainMisclassPlot.XMax = epochCount;
         }
 
         private void initializeLayers(int numInputs, int numOutputs)
