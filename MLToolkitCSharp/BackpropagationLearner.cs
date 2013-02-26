@@ -65,7 +65,6 @@ namespace MLToolkitCSharp
                 validationLabels.add(labels, (int)order.get(i, 0), 0, 1);
             }
 
-
             int steadyEpochs = 0;
             int epochCount = 0;
             double accuracy = measureAccuracy(validationFeatures, validationLabels, new Matrix());
@@ -106,6 +105,13 @@ namespace MLToolkitCSharp
             while (steadyEpochs < 50)
             {
                 trainOrder.shuffle(m_rand);
+                Matrix trainFeatures = new Matrix(features, (int)trainOrder.get(0, 0), 0, 1, features.cols());
+                Matrix trainLabels = new Matrix(labels, (int)trainOrder.get(0, 0), 0, 1, 1);
+                for (int i = 1; i < trainOrder.rows(); ++i)
+                {
+                    trainFeatures.add(features, (int)trainOrder.get(i, 0), 0, 1);
+                    trainLabels.add(labels, (int)trainOrder.get(i, 0), 0, 1);
+                }
                 for (int i = 0; i < trainOrder.rows(); ++i)
                 {
                     int rowToUse = (int)trainOrder.get(i, 0);
@@ -151,8 +157,7 @@ namespace MLToolkitCSharp
                 if (msePlot != null)
                     msePlot.addDataPoint(epochCount, calculateMeanSquaredError(validationFeatures, validationLabels));
                 if (trainMisclassPlot != null)
-                    trainMisclassPlot.addDataPoint(epochCount, 1 - measureAccuracy(features, labels, null));
-
+                    trainMisclassPlot.addDataPoint(epochCount, 1 - measureAccuracy(trainFeatures, trainLabels, null));
             }
             Console.WriteLine("Training took " + epochCount + " epochs.");
             if (misclassificationPlot != null)
