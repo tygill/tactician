@@ -9,6 +9,7 @@ action_cards = set()
 victory_cards = set()
 treasure_cards = set()
 curse_cards = set()
+prize_cards = set()
 
 victory_point_symbol = unichr(9660)
 
@@ -84,6 +85,7 @@ class dominion_player:
         # Island, Haven, Native Villiage, etc.
         #self.out_of_play = {}
         self.cards_in_hand = 0
+        self.vp = 0
         
     def set_final_score(self, score):
         self.final_score = score
@@ -131,6 +133,9 @@ class dominion_player:
         
     def trash(self, card):
         decr_value(self.deck, card)
+        
+    def add_vp(self, vp):
+        self.vp += vp
     
 # This class stores information about the state of a game of dominion
 class dominion_game:
@@ -140,6 +145,7 @@ class dominion_game:
         self.players = {}
         self.num_players = 0
         self.trash_pile = {}
+        self.prizes = {}
         
         # Game meta-data
         self.empty_piles = []
@@ -206,12 +212,16 @@ class dominion_game:
             else:
                 # All other cards start with 10 in the supply (except some from Dark Ages, but those aren't supported)
                 self.supply[card] = 10
+        # Initialize the players starting decks
         for player in self.players.values():
             for i in range(7):
                 self.gain('Copper', player)
             for i in range(3):
                 self.gain('Estate', player)
             player.reshuffle()
+        # Initialize the prizes (even if Tournament isn't in play. It might be in the Black Market deck or something. No harm in setting it up.)
+        for card in prize_cards:
+            self.prizes[card] = 1
                 
                 
     # Game state manipulation functions
@@ -287,16 +297,24 @@ class dominion_game:
         self.gain(card)
     
     # Gives a card from the supply to a player
-    def gain(self, card, player = None):
+    def gain(self, card, player = None, source = 'supply'):
         assert_card(card)
         self.cards_gained.append(card)
-        decr_value(self.supply, card)
+        if source == 'trash':
+            decr_value(self.trash_pile, card)
+        elif source == 'prizes':
+            decr_value(self.prizes, card)
+        else:
+            decr_value(self.supply, card)
         self.get_player(player).gain(card)
         
     def trash(self, card, player = None):
         assert_card(card)
         incr_value(self.trash_pile, card)
         self.get_player(player).trash(card)
+        
+    def add_vp(self, vp = 1, player = None):
+        self.get_player(player).add_vp(vp)
                 
     # Utility methods
     # ---------------
@@ -441,6 +459,14 @@ def add_victory_action_card(card, plural = None):
     victory_cards.add(card)
     action_cards.add(card)
     add_card(card, plural)
+    
+def add_treasure_prize_card(card, plural = None):
+    prize_cards.add(card)
+    add_treasure_card(card)
+    
+def add_action_prize_card(card, plural = None):
+    prize_cards.add(card)
+    add_action_card(card)
 
 add_action_card('Moat')
 add_action_card('Adventurer')
@@ -630,11 +656,11 @@ add_action_card('Walled Village')
 add_action_card('Black Market')
 
 # Prize Cards
-add_treasure_card('Diadem')
-add_action_card('Bag of Gold')
-add_action_card('Followers', 'Followers')
-add_action_card('Princess', 'Princesses')
-add_action_card('Trusty Steed')
+add_treasure_prize_card('Diadem')
+add_action_prize_card('Bag of Gold')
+add_action_prize_card('Followers', 'Followers')
+add_action_prize_card('Princess', 'Princesses')
+add_action_prize_card('Trusty Steed')
 
 
 # It would seem that isotropic doesn't have Dark Ages cards publicly available, so sadly, these cards

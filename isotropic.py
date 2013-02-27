@@ -113,6 +113,16 @@ buy_card_regex = re.compile(r'\s*(?P<player>.+) buys an? ' + card_regex_piece + 
 #  player: Player who reshuffled
 reshuffle_regex = re.compile(r'\s*(?:\.{3} )*\((?P<player>.+) reshuffles\.\)')
 
+# Ordering of basic gettings (in an attempt to consolidate all of these)
+#  draws, buys
+#  draws, actions
+#  draws, money
+#  buys, money
+#  money, vp
+#  draw, action, buy, money
+# Doesn't work...and it lets too much through.
+#basic_gets_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?(?:draw(?:ing|s) (?P<cards>\d+) cards?(?: and )?)?(?:get(?:ting|s) \+(?P<actions>\d+) actions?,?)?(?:(?:get(?:ting|s))? \+(?P<buys>\d+) buys?,?)?(?:(?:get(?:ting|s))? \+\$(?P<money>\d+))?\.')
+
 # Matches: ... getting +$n.
 #  money: Amount of money added to the turn context
 get_money_regex = re.compile(r'\s*(?:\.{3} )*getting \+\$(?P<money>\d+)\.')
@@ -142,10 +152,32 @@ draw_cards_get_buys_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?draw(
 #  actions: Actions added
 draw_cards_get_actions_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?draw(?:ing|s) (?P<cards>\d+) cards? and get(?:ting|s) \+(?P<actions>\d+) actions?\.')
 
+# Matches: ... drawing n card[s] and getting +$n.
+#  player: Player (or None. Not sure if anything will give a player.
+#  cards: Cards drawn
+#  money: Money added
+draw_cards_get_money_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?draw(?:ing|s) (?P<cards>\d+) cards? and get(?:ting|s) \+\$(?P<money>\d+)\.')
+
+# Matches: ... getting +b buys and +$n.
+#  player
+#  buys
+#  money
+get_buys_money_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?get(?:ting|s) \+(?P<buys>\d+) buys? and \+\$(?P<money>\d+)\.')
+
+# Matches: ... getting +n vpsym.
+#  player
+#  vp
+get_vp_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?get(?:ting|s) \+(?P<vp>\d+) ' + get_victory_symbol() + r'\.')
+
 # Matches: ... [<player>] discard[ing|s] <cards>.
 #  player: Player, or None for current player
 #  cards: List of cards discarded (may be from deck or hand or who knows where)
 discard_cards_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?discard(?:ing|s) ' + card_list_regex_piece + r'\.')
+
+# Matches: ... <player> discards n cards.
+#  player
+#  cards: Number of cards drawn
+discard_count_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.+) discards (?P<cards>\d+) cards?\.')
 
 # Matches: ... [<player>] gain[ing|s] a <card>.
 #  player: Player who gains something (if None, it means the current player)
@@ -199,7 +231,43 @@ talisman_gaining_another_regex = re.compile(r'\s*(?:\.{3} )*gaining another ' + 
 
 # Jack of All Trades (and perhaps others? Sea Hag maybe?)
 # Matches: ... discarding the top card of the deck.
-jack_of_all_trades_discarding_top_card = re.compile(r'\s*(?:\.{3} )*discarding the top card of the deck\.')
+jack_of_all_trades_discarding_top_card_regex = re.compile(r'\s*(?:\.{3} )*discarding the top card of the deck\.')
+
+# Noble Brigand (perhaps others?)
+# Matches: ... <player> reveals and discards <cards>.
+#  player
+#  cards: Cards revealed and discarded
+noble_brigand_reveal_and_discard_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.+) reveals and discards ' + card_list_regex_piece + r'\.')
+# Matches: ... <player> draws and reveals <cards, trashing a <card>.
+#  player
+#  cards: Cards revealed and discarded
+#  card: Card trashed
+noble_brigand_draw_reveal_trash_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.+) draws and reveals ' + card_list_regex_piece + r', trashing an? ' + card_regex_piece + r'\.')
+# Matches: ... <player> gains the <card>.
+#  player
+#  card
+noble_brigand_gain_from_trash_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.+) gains the ' + card_regex_piece + r'\.')
+
+# Mining Village (slightly more generic than mining village requires, might catch other cards.)
+# Matches: ... trashing the <span class=card-none>Mining Village</span> for +$2.
+mining_village_trashing_regex = re.compile(r'\s*(?:\.{3} )*trashing the ' + card_regex_piece + r' for \+\$(?P<money>\d+)\.')
+
+# Bank (and Philosopher's Stone)
+#  money
+#  deck_size
+#  discard_size
+bank_philosophers_stone_worth_regex = re.compile(r'\s*(?:\.{3} )*which is worth \+\$(?P<money>\d+)(?: \((?P<deck_size>\d+) cards in deck, (?P<discard_size>\d+) cards in discard\))?\.')
+
+# Royal Seal
+#  card
+royal_seal_putting_on_deck_regex = re.compile(r'\s*(?:\.{3} )*putting the ' + card_regex_piece + r' on top of the deck\.')
+
+# Tournament
+#  player
+#  discard: Card discarded
+#  gain: Card gained
+tournament_gain_prize_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.+) discards an? ' + card_regex_piece_formatable.format('discard') + r' and gains an? ' + card_regex_piece_formatable.format('gain') + r' on the deck\.')
+
 
 
 
@@ -279,13 +347,13 @@ class isotropic_parser:
         match = self.regex(draw_hand_regex, line)
         if match:
             self.game.cleanup()
-            foreach_card(match.group('cards'), lambda card: self.game.draw(card, match.group('player')))
+            ##foreach_card(match.group('cards'), lambda card: self.game.draw(card, match.group('player')))
             return True
             
         # Check for reshuffling
         match = self.regex(reshuffle_regex, line)
         if match:
-            self.game.reshuffle(match.group('player'))
+            ##self.game.reshuffle(match.group('player'))
             return True
             
         # Check for +$
@@ -309,28 +377,55 @@ class isotropic_parser:
         # Check for drawing cards
         match = self.regex(draw_cards_regex, line)
         if match:
-            self.game.draw(int(match.group('cards')), match.group('player'))
+            ##self.game.draw(int(match.group('cards')), match.group('player'))
             return True
         
         # Check for drawing combined with buys
         match = self.regex(draw_cards_get_buys_regex, line)
         if match:
             # Ignore the player (given by Wharf)
-            self.game.draw(int(match.group('cards')))
+            ##self.game.draw(int(match.group('cards')))
             self.game.add_buys(int(match.group('buys')))
             return True
             
         # Check for drawing combined with actions
         match = self.regex(draw_cards_get_actions_regex, line)
         if match:
-            self.game.draw(int(match.group('cards')))
+            ##self.game.draw(int(match.group('cards')))
             self.game.add_actions(int(match.group('actions')))
+            return True
+            
+        # Check for drawing combined with money
+        match = self.regex(draw_cards_get_money_regex, line)
+        if match:
+            ##self.game.draw(int(match.group('cards')))
+            self.game.add_money(int(match.group('money')))
+            return True
+            
+        # Check for buys and money
+        match = self.regex(get_buys_money_regex, line)
+        if match:
+            self.game.add_buys(int(match.group('buys')))
+            self.game.add_money(int(match.group('money')))
+            return True
+            
+        # Check for vp
+        match = self.regex(get_vp_regex, line)
+        if match:
+            self.game.add_vp(int(match.group('vp')))
             return True
         
         # Check for discarding cards
         match = self.regex(discard_cards_regex, line)
         if match:
-            foreach_card(match.group('cards'), lambda card: self.game.discard(card))
+            ##foreach_card(match.group('cards'), lambda card: self.game.discard(card))
+            return True
+            
+        # Check for discarding a number of unspecified cards
+        match = self.regex(discard_count_regex, line)
+        if match:
+            ##for i in range(int(match.group('cards'))):
+            ##    self.game.discard(None, match.group('player'))
             return True
         
         # Check for gained cards
@@ -379,7 +474,7 @@ class isotropic_parser:
         match = self.regex(farming_village_put_cards_in_hand_regex, line)
         if match:
             # The card came from the deck, so this card should be drawn
-            self.game.draw(match.group('card'))
+            ##self.game.draw(match.group('card'))
             return True
             
         match = self.regex(talisman_gaining_another_regex, line)
@@ -388,27 +483,73 @@ class isotropic_parser:
             self.game.gain(match.group('card'))
             return True
             
-        match = self.regex(jack_of_all_trades_discarding_top_card, line)
+        match = self.regex(jack_of_all_trades_discarding_top_card_regex, line)
         if match:
             # Draw a card, then discard it.
             # This really should make sure the card drawn and discarded is the same, but
             # as drawing and discarding isn't really being tracked anyway...
-            self.game.draw()
-            self.game.discard()
+            ##self.game.draw()
+            ##self.game.discard()
             return True
+            
+        match = self.regex(noble_brigand_reveal_and_discard_regex, line)
+        if match:
+            # Draw from deck, then discard them both.
+            ##foreach_card(match.group('cards'), lambda card: self.game.draw(card, match.group('player')))
+            ##foreach_card(match.group('cards'), lambda card: self.game.discard(card, match.group('player')))
+            return True
+            
+        match = self.regex(noble_brigand_draw_reveal_trash_regex, line)
+        if match:
+            # Draw from deck, trash one. The other gets discarded on the next line
+            ##foreach_card(match.group('cards'), lambda card: self.game.draw(card, match.group('player')))
+            self.game.trash(match.group('card'), match.group('player'))
+            return True
+            
+        match = self.regex(noble_brigand_gain_from_trash_regex, line)
+        if match:
+            # Gain the card that was just trashed
+            self.game.gain(match.group('card'), match.group('player'), 'trash')
+            return True
+            
+        match = self.regex(mining_village_trashing_regex, line)
+        if match:
+            self.game.trash(match.group('card'))
+            self.game.add_money(int(match.group('money')))
+            return True
+            
+        match = self.regex(bank_philosophers_stone_worth_regex, line)
+        if match:
+            # deck_size and discard_size are ignored.
+            self.game.add_money(int(match.group('money')))
+            return True
+            
+        match = self.regex(royal_seal_putting_on_deck_regex, line)
+        if match:
+            # Move the card indicated from the discard pile to the top of the deck
+            # Ignored, as it just affects the deck and discard.
+            return True
+            
+        match = self.regex(tournament_gain_prize_regex, line)
+        if match:
+            ##self.game.discard(match.group('discard'), match.group('player'))
+            # Gain a card from the prize pile, unless its a duchy
+            self.game.gain(match.group('gain'), match.group('player'), 'supply' if match.group('gain') == 'Duchy' else 'prizes')
+            return True
+            
             
             
         # Default return
         return False
         
-    # This matches a regex, and if there is a 'player' group, makes sure the player is valid
+    # This matches a regex, and if there is a 'player' group, makes sure the player is valid.
+    # This is much easier than refreshing the regexes once the players names are found.
     # Note that as this is not called for the outpost or possession, their use of different names for players is not taken into account
     def regex(self, regex, line):
         match = regex.match(line)
         if match and 'player' in match.groupdict():
             player = match.group('player')
             if player is not None and player not in self.players:
-                print 'Player: {0}'.format(player)
                 return None
         return match
     
@@ -433,12 +574,14 @@ class isotropic_parser:
         self.file = open(filename, 'rb')
         # Reset the game instance associated with this parser
         self.game = dominion_game()
+        self.unhandled_lines = 0
         self.line_num = 0
         self.players = [] # cache list of players for regex player validation
         
         self.read_header()
         self.read_scores()
         self.read_game()
+        return self.unhandled_lines # Return the number of lines that were not matched
         
     def read_header(self):
         # Get some game metadata from the first line
@@ -557,7 +700,7 @@ class isotropic_parser:
         if not br_regex.match(line):
             self.unmatched_line(line, br_regex)
         
-        # Read each turn (read_turn() returns true until there's no more turns to read - thanks <br> tags)
+        # Read each turn (read_turn() returns true until there's no more turns to read - thanks <brmoneyags)
         while (self.read_turn()):
             pass
             
@@ -599,6 +742,7 @@ class isotropic_parser:
             
             # If the line was not successfully read, print it so it can be added.
             if not success:
+                self.unhandled_lines += 1
                 self.handle_event(unhandled_line_event, self.line_num, line)
                 #print
                 #print 'Unknown line: {0}'.format(line)

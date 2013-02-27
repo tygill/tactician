@@ -1,8 +1,9 @@
 import datetime
 import time
 import urllib2
-import tarfile
+import re
 import sys
+import tarfile
 import os
 import os.path
 
@@ -35,11 +36,24 @@ def download_file(url, filename_download, filename):
     os.rename(filename_download, filename)
     print 'Downloaded in {0} minutes'.format((time.time() - start) / 60.0)
     
-def extract_file(filename, finished_name):
+def extract_file(extraction_dir, filename, finished_name):
     start = time.time()
+    name = filename.split('/')[-1]
+    match = re.match(r'(?P<year>\d+)\-(?P<month>\d+)\-(?P<day>\d+)\.tar\.bz2', name)
+    if match:
+        year = int(match.group('year'))
+        month = int(match.group('month'))
+        day = int(match.group('day'))
+    else:
+        print 'Couldn\'t match regex! ' + name
+        print 
+        exit(1)
     file = tarfile.open(filename, 'r')
     print 'Extracting ' + filename
-    file.extractall(extraction_dir)
+    dir = extraction_dir.format(year, month, day)
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+    file.extractall(dir)
     file.close()
     os.rename(filename, finished_name)
     print 'Extracted in {0} minutes'.format((time.time() - start) / 60.0)
@@ -53,19 +67,35 @@ if __name__ == '__main__':
     
     download_dir = 'gamelogs'
     extracted_dir = 'gamelogs/extracted'
-    extraction_dir = 'games'
+    extraction_root_dir = 'games'
+    extraction_dir = extraction_root_dir + '/{0:04}/{1:02}/{2:02}'
     if not os.path.exists(download_dir):
         os.makedirs(download_dir)
     if not os.path.exists(extracted_dir):
         os.makedirs(extracted_dir)
-    if not os.path.exists(extraction_dir):
-        os.makedirs(extraction_dir)
+    #if not os.path.exists(extraction_dir):
+    #    os.makedirs(extraction_dir)
+    
+    # Move all the files that were previously extracted to their new folders
+    for file in os.listdir(extraction_root_dir):
+        if os.path.isfile(os.path.join(extraction_root_dir, file)):
+            match = re.match(r'game-(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})-\d{6}-[\d\w]{8}\.html', file)
+            if match:
+                year = int(match.group('year'))
+                month = int(match.group('month'))
+                day = int(match.group('day'))
+                dir = extraction_dir.format(year, month, day)
+                if not os.path.exists(dir):
+                    os.makedirs(dir)
+                old_path = os.path.join(extraction_root_dir, file)
+                new_path = os.path.join(dir, file)
+                os.rename(old_path, new_path)
     
     start_date = datetime.date(2013, 1, 1)
     end_date = datetime.date.today()
     time_delta = datetime.timedelta(days=-1)
     cur_date = end_date + time_delta
-    while start_date < cur_date:
+    while start_date <= cur_date:
         url = cur_date.strftime('http://dominion.isotropic.org/gamelog/%Y%m/%d/all.tar.bz2')
         filename = cur_date.strftime('{0}/%Y-%m-%d.tar.bz2'.format(download_dir))
         filename_download = filename + '.tmp'
@@ -77,5 +107,5 @@ if __name__ == '__main__':
         # Skip extracting files that have been moved to the extracted folder
         if os.path.exists(filename) and not os.path.exists(finished_name):
             if extract:
-                extract_file(filename, finished_name)
+                extract_file(extraction_dir, filename, finished_name)
         cur_date = cur_date + time_delta

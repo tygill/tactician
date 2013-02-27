@@ -19,7 +19,6 @@ class feature_extractor:
         pass
         
     def unhandled_line_handler(self, game, line_num, line):
-        print
         print '{0}: Unhandled line: {1}'.format(line_num, line.encode('utf-8'))
         
     def unexpected_line_handler(self, game, line_num, line, regex = None):
@@ -30,9 +29,7 @@ class feature_extractor:
             print '{0}: Unexpected line: {1}'.format(line_num, line.encode('utf-8'))
             
     def parse_complete_handler(self, game):
-        print
         print 'File complete.'
-        print
         
 if __name__ == '__main__':
     parser = isotropic_parser()
@@ -44,12 +41,13 @@ if __name__ == '__main__':
     parser.register_handler(parse_complete_event, features.parse_complete_handler)
     
     log_path = 'games'
-    #skip = 1
-    for filename in os.listdir(log_path):
-        #if skip > 0:
-        #    skip -= 1
-        #    continue
-        filename = os.path.join(log_path, filename)
-        print 'Parsing: {0}'.format(filename)
-        parser.read(filename)
-    #parser.read('test.html')
+    # Iterate over all files in the log path
+    # http://stackoverflow.com/questions/120656/directory-listing-in-python
+    for dirname, dirnames, filenames in os.walk(log_path):
+        for filename in filenames:
+            file = os.path.join(dirname, filename)
+            print 'Parsing: {0}'.format(file)
+            errors = parser.read(file)
+            if errors != 0:
+                print 'Unhandled lines in file: {0}'.format(file)
+                exit(0)
