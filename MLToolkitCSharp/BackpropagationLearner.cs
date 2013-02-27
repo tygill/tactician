@@ -147,7 +147,7 @@ namespace MLToolkitCSharp
                 }
                 epochCount++;
                 double newAccuracy = measureAccuracy(validationFeatures, validationLabels, new Matrix());
-                if (newAccuracy - accuracy < 0.1)
+                if (newAccuracy - accuracy < 0.05)
                     steadyEpochs++;
                 else
                     steadyEpochs = 0;
