@@ -19,7 +19,7 @@ namespace MLToolkitCSharp
          *  When you make a new learning algorithm, you should add a line for it to this method.
          */
         public SupervisedLearner getLearner(string model, double learningRate, double momentum,
-            Random rand, Plotter plotter)
+            int numHiddenNodes, Random rand, Plotter plotter)
         {
             if (model.Equals("baseline", StringComparison.OrdinalIgnoreCase))
             {
@@ -31,7 +31,8 @@ namespace MLToolkitCSharp
             }
             else if (model.Equals("neuralnet", StringComparison.OrdinalIgnoreCase))
             {
-                return new BackpropagationLearner(learningRate, 1, rand, plotter, momentum);
+                return new BackpropagationLearner(learningRate, 1, numHiddenNodes, rand, plotter,
+                    momentum);
             }
             /*
             else if (model.Equals("decisiontree", StringComparison.OrdinalIgnoreCase))
@@ -69,7 +70,7 @@ namespace MLToolkitCSharp
 
             // Load the model
             SupervisedLearner learner = getLearner(parser.Learner, parser.LearningRate, parser.Momentum,
-                rand, plotter);
+                parser.NumHiddenNodes, rand, plotter);
 
             // Load the ARFF file
             Matrix data = new Matrix();
@@ -256,6 +257,7 @@ namespace MLToolkitCSharp
                             if (Learner.Equals("neuralnet"))
                             {
                                 Momentum = double.Parse(argv[++i]);
+                                NumHiddenNodes = int.Parse(argv[++i]);
                             }
                         }
                         else if (argv[i].Equals("-E"))
@@ -330,6 +332,7 @@ namespace MLToolkitCSharp
             public string Learner { private set; get; }
             public double LearningRate { private set; get; }
             public double Momentum { private set; get; }
+            public int NumHiddenNodes { private set; get; }
             public string Evaluation { private set; get; }
             public string EvalParameter { private set; get; }
             public bool Verbose { private set; get; }
