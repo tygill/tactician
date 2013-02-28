@@ -7,8 +7,13 @@ import os
 class feature_extractor:
     
     def __init__(self, filename):
-        #self.file = open(filename, 'w')
-        pass
+        self.features = []
+        
+    def add_feature(self, func):
+        self.features.append(func)
+        
+    def add_card_feature(self, card):
+        self.add_feature(lambda game: 1 if game.is_card_in_supply(card) else 0)
         
     def parsing_line_handler(self, game, line_num, line):
         #print 'Parsing line: {0}'.format(line)
@@ -29,7 +34,8 @@ class feature_extractor:
             print '{0}: Unexpected line: {1}'.format(line_num, line.encode('utf-8'))
             
     def parse_complete_handler(self, game):
-        print 'File complete.'
+        #print 'File complete.'
+        pass
         
 if __name__ == '__main__':
     parser = isotropic_parser()

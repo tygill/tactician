@@ -23,6 +23,9 @@ card_count_regex = re.compile('(?:(?P<count>[an\d]+) )?<[\\w=\\-"\' ]+>(?P<card>
 card_list_regex_piece = u'(?P<cards>(?:(?:\d+|an?) (?:<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>|\u25BC),? ?)+(?:(?:and )?(?:\d+|an?) (?:<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>|\u25BC))?)'
 card_list_no_count_regex_piece = '(?P<cards>(?:<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>,? ?)+(?:(?:and )?<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>)?)'
 
+# Matches the prefix to the line (the ...s)
+prefix_piece = r'\s*(?:\.{3} )*'
+
 
 # Specific Regexes
 # ----------------
@@ -100,18 +103,18 @@ outpost_turn_header_regex = re.compile('\\s*<img src="http://www\\.gravatar\\.co
 draw_hand_regex = re.compile('\\s*<span class=logonly>\\((?P<player>.+)(?:\'s first hand| draws): ' + card_list_regex_piece + '\\.\\)</span>')
 
 # Matches: <player> plays <cards>.
-#  player: Player who played the cards
+#  player: Player who played the cards, or None
 #  cards: List of cards played (may be multiple, especially for treasures, both in quantity and type. e.g., 2 Coppers and a Silver)
-play_cards_regex = re.compile(r'\s*(?P<player>.+) plays ' + card_list_regex_piece + r'\.')
+play_cards_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?play(?:ing|s) ' + card_list_regex_piece + r'\.')
 
 # Matches: <player> buys a <card>.
 #  player: Player who played the cards
 #  card: Card purchased
-buy_card_regex = re.compile(r'\s*(?P<player>.+) buys an? ' + card_regex_piece + r'\.')
+buy_card_regex = re.compile(prefix_piece + r'(?P<player>.+) buys an? ' + card_regex_piece + r'\.')
 
 # Matches: (<player> reshuffles.)
 #  player: Player who reshuffled
-reshuffle_regex = re.compile(r'\s*(?:\.{3} )*\((?P<player>.+) reshuffles\.\)')
+reshuffle_regex = re.compile(prefix_piece + r'\((?P<player>.+) reshuffles\.\)')
 
 # Ordering of basic gettings (in an attempt to consolidate all of these)
 #  draws, buys
@@ -125,80 +128,99 @@ reshuffle_regex = re.compile(r'\s*(?:\.{3} )*\((?P<player>.+) reshuffles\.\)')
 
 # Matches: ... getting +$n.
 #  money: Amount of money added to the turn context
-get_money_regex = re.compile(r'\s*(?:\.{3} )*getting \+\$(?P<money>\d+)\.')
+get_money_regex = re.compile(prefix_piece + r'getting \+\$(?P<money>\d+)\.')
 
 # Matches: ... getting +n action(s).
 #  actions: Number of actions added
-get_actions_regex = re.compile(r'\s*(?:\.{3} )*getting \+(?P<actions>\d+) actions?\.')
+get_actions_regex = re.compile(prefix_piece + r'getting \+(?P<actions>\d+) actions?\.')
 
 # Matches: ... getting +n buy(s).
 #  buys: Number of buys added
-get_buys_regex = re.compile(r'\s*(?:\.{3} )*getting \+(?P<buys>\d+) buys?\.')
+get_buys_regex = re.compile(prefix_piece + r'getting \+(?P<buys>\d+) buys?\.')
 
 # Matches: ... [<player>] draw[ing|s] n card(s).
 #  player: Player who draws (if None, it means the current player)
 #  cards: Number of cards drawn
-draw_cards_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?draw(?:ing|s) (?P<cards>\d+) cards?\.')
+draw_cards_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?draw(?:ing|s) (?P<cards>\d+) cards?(?: from the <span class=card-duration>Caravan</span>)?\.')
 
 # Matches: ... drawing n card[s] and getting +n buy[s].
 #  player: Player (or None, meaning current player. Wharf gives a player)
 #  cards: Number of cards drawn
 #  buys: Number of buys added
-draw_cards_get_buys_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?draw(?:ing|s) (?P<cards>\d+) cards? and get(?:ting|s) \+(?P<buys>\d+) buys?(?: from the <span class=card-duration>Wharf</span>)?\.')
+draw_cards_get_buys_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?draw(?:ing|s) (?P<cards>\d+) cards? and get(?:ting|s) \+(?P<buys>\d+) buys?(?: from the <span class=card-duration>Wharf</span>)?\.')
 
 # Matches: ... drawing n card[s] and getting +n action[s].
 #  player: Player (or None. Not sure if anything will give a player.
 #  cards: Cards drawn
 #  actions: Actions added
-draw_cards_get_actions_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?draw(?:ing|s) (?P<cards>\d+) cards? and get(?:ting|s) \+(?P<actions>\d+) actions?\.')
+draw_cards_get_actions_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?draw(?:ing|s) (?P<cards>\d+) cards? and get(?:ting|s) \+(?P<actions>\d+) actions?\.')
 
 # Matches: ... drawing n card[s] and getting +$n.
 #  player: Player (or None. Not sure if anything will give a player.
 #  cards: Cards drawn
 #  money: Money added
-draw_cards_get_money_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?draw(?:ing|s) (?P<cards>\d+) cards? and get(?:ting|s) \+\$(?P<money>\d+)\.')
+draw_cards_get_money_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?draw(?:ing|s) (?P<cards>\d+) cards? and get(?:ting|s) \+\$(?P<money>\d+)\.')
 
 # Matches: ... getting +b buys and +$n.
 #  player
 #  buys
 #  money
-get_buys_money_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?get(?:ting|s) \+(?P<buys>\d+) buys? and \+\$(?P<money>\d+)\.')
+get_buys_money_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?get(?:ting|s) \+(?P<buys>\d+) buys? and \+\$(?P<money>\d+)\.')
 
 # Matches: ... getting +n vpsym.
 #  player
 #  vp
-get_vp_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?get(?:ting|s) \+(?P<vp>\d+) ' + get_victory_symbol() + r'\.')
+get_vp_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?get(?:ting|s) \+(?P<vp>\d+) ' + get_victory_symbol() + r'\.')
+
+# Matchs: ... getting +$2 and +1 vpsym.
+#  money
+#  mp
+get_money_vp_regex = re.compile(prefix_piece + r'getting \+\$(?P<money>\d+) and \+(?P<vp>\d+) ' + get_victory_symbol() + r'\.')
 
 # Matches: ... [<player>] discard[ing|s] <cards>.
 #  player: Player, or None for current player
 #  cards: List of cards discarded (may be from deck or hand or who knows where)
-discard_cards_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?discard(?:ing|s) ' + card_list_regex_piece + r'\.')
+discard_cards_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?discard(?:ing|s) ' + card_list_regex_piece + r'\.')
 
 # Matches: ... <player> discards n cards.
 #  player
 #  cards: Number of cards drawn
-discard_count_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.+) discards (?P<cards>\d+) cards?\.')
+discard_count_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?discard(?:ing|s) (?P<cards>\d+) cards?\.')
+
+# Matches: ... [<player>] put[ting|s] <cards> back on the deck.
+#  player
+#  cards
+#  order: First on top part
+put_cards_on_deck_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?put(?:ting|s) ' + card_list_regex_piece + r' back on the deck(?: \((?P<order>first on top)\))?\.')
+
+# Matches: ... [<player>] put[ting|s] n cards back on the deck[ (first on top)].
+#  player
+#  cards: Number of cards
+put_count_on_deck_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?put(?:ting|s) (?P<cards>\d+) cards? back on the deck\.')
 
 # Matches: ... [<player>] gain[ing|s] a <card>.
 #  player: Player who gains something (if None, it means the current player)
 #  card: The card gained.
-gain_cards_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?gain(?:ing|s) an? ' + card_regex_piece + r'\.')
+gain_cards_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?gain(?:ing|s) an? ' + card_regex_piece + r'\.')
 
 # Matches: ... There's nothing for <player> to gain.
 #  player: Player who didn't gain anything
-nothing_to_gain_regex = re.compile(r"\s*(?:\.{3} )*There's nothing for (?P<player>.+) to gain.")
+nothing_to_gain_regex = re.compile(prefix_piece + r"There's nothing for (?P<player>.+) to gain.")
 
 # Matches: ... [<player>] trash[ing|es] <cards>.
 #  player: Player who trashed a card (or None, meaning current player)
 #  cards: Cards trashed
-trash_cards_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?trash(?:ing|es) ' + card_list_regex_piece + r'\.')
+trash_cards_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?trash(?:ing|es) ' + card_list_regex_piece + r'\.')
 
 # Used by Fortune Teller, Pirate Ship, etc...
 # Matches: ... <player> reveals <cards>.
 #  player: Player who reveals cards (or None if current player)
 #  cards: Cards revealed
-reveal_cards_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?reveal(?:ing|s) ' + card_list_regex_piece + r'\.')
+reveal_cards_regex = re.compile(prefix_piece + r'(?:(?P<player>.+) )?reveal(?:ing|s) ' + card_list_regex_piece + r'\.')
 
+# Matches: ... <player> does nothing.
+#  player
+does_nothing_regex = re.compile(prefix_piece + r'(?P<player>.+) does nothing\.')
 
 
 # Card Specific Regexes
@@ -207,66 +229,94 @@ reveal_cards_regex = re.compile(r'\s*(?:\.{3} )*(?:(?P<player>.+) )?reveal(?:ing
 # Swindler
 #  player: Player who trashes something
 #  card: Card trashed
-swindler_trash_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.+) turns up an? ' + card_regex_piece + r' and trashes it\.')
+swindler_trash_regex = re.compile(prefix_piece + r'(?P<player>.+) turns up an? ' + card_regex_piece + r' and trashes it\.')
 #  player: Player whose cards were replaced
 #  old_card: Card trashed (same as card extracted from trash_regex above)
 #  new_card: New card gained to replace it
-swindler_replace_regex = re.compile(r"\s*(?:\.{3} )*replacing (?P<player>.+)'s " + card_regex_piece_formatable.format('old_card') + r' with an? ' + card_regex_piece_formatable.format('new_card') + r'\.')
+swindler_replace_regex = re.compile(prefix_piece + r"replacing (?P<player>.+)'s " + card_regex_piece_formatable.format('old_card') + r' with an? ' + card_regex_piece_formatable.format('new_card') + r'\.')
 
 # Fortune Teller - others?
 # Matches: <player> puts the <card> back onto the deck.
 #  player
 #  card
-fortune_teller_put_cards_on_deck_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.+) puts the ' + card_regex_piece + r' back onto the deck\.')
+fortune_teller_put_cards_on_deck_regex = re.compile(prefix_piece + r'(?P<player>.+) puts the ' + card_regex_piece + r' back onto the deck\.')
 
 # Farming Village
 # Matches: ... putting the <card> into the hand.
 #  card
-farming_village_put_cards_in_hand_regex = re.compile(r'\s*(?:\.{3} )*putting the ' + card_regex_piece + r' into the hand\.')
+farming_village_put_cards_in_hand_regex = re.compile(prefix_piece + r'putting the ' + card_regex_piece + r' into the hand\.')
 
 # Talisman
 # Matches: ... gaining another <card>.
 #  card
-talisman_gaining_another_regex = re.compile(r'\s*(?:\.{3} )*gaining another ' + card_regex_piece + r'\.')
+talisman_gaining_another_regex = re.compile(prefix_piece + r'gaining another ' + card_regex_piece + r'\.')
 
 # Jack of All Trades (and perhaps others? Sea Hag maybe?)
 # Matches: ... discarding the top card of the deck.
-jack_of_all_trades_discarding_top_card_regex = re.compile(r'\s*(?:\.{3} )*discarding the top card of the deck\.')
+jack_of_all_trades_discarding_top_card_regex = re.compile(prefix_piece + r'discarding the top card of the deck\.')
 
 # Noble Brigand (perhaps others?)
 # Matches: ... <player> reveals and discards <cards>.
 #  player
 #  cards: Cards revealed and discarded
-noble_brigand_reveal_and_discard_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.+) reveals and discards ' + card_list_regex_piece + r'\.')
+noble_brigand_reveal_and_discard_regex = re.compile(prefix_piece + r'(?P<player>.+) reveals and discards ' + card_list_regex_piece + r'\.')
 # Matches: ... <player> draws and reveals <cards, trashing a <card>.
 #  player
 #  cards: Cards revealed and discarded
 #  card: Card trashed
-noble_brigand_draw_reveal_trash_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.+) draws and reveals ' + card_list_regex_piece + r', trashing an? ' + card_regex_piece + r'\.')
+noble_brigand_draw_reveal_trash_regex = re.compile(prefix_piece + r'(?P<player>.+) draws and reveals ' + card_list_regex_piece + r', trashing an? ' + card_regex_piece + r'\.')
 # Matches: ... <player> gains the <card>.
 #  player
 #  card
-noble_brigand_gain_from_trash_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.+) gains the ' + card_regex_piece + r'\.')
+noble_brigand_gain_from_trash_regex = re.compile(prefix_piece + r'(?P<player>.+) gains the ' + card_regex_piece + r'\.')
 
 # Mining Village (slightly more generic than mining village requires, might catch other cards.)
 # Matches: ... trashing the <span class=card-none>Mining Village</span> for +$2.
-mining_village_trashing_regex = re.compile(r'\s*(?:\.{3} )*trashing the ' + card_regex_piece + r' for \+\$(?P<money>\d+)\.')
+mining_village_trashing_regex = re.compile(prefix_piece + r'trashing the ' + card_regex_piece + r' for \+\$(?P<money>\d+)\.')
 
 # Bank (and Philosopher's Stone)
 #  money
 #  deck_size
 #  discard_size
-bank_philosophers_stone_worth_regex = re.compile(r'\s*(?:\.{3} )*which is worth \+\$(?P<money>\d+)(?: \((?P<deck_size>\d+) cards in deck, (?P<discard_size>\d+) cards in discard\))?\.')
+bank_philosophers_stone_worth_regex = re.compile(prefix_piece + r'which is worth \+\$(?P<money>\d+)(?: \((?P<deck_size>\d+) cards in deck, (?P<discard_size>\d+) cards in discard\))?\.')
 
 # Royal Seal
 #  card
-royal_seal_putting_on_deck_regex = re.compile(r'\s*(?:\.{3} )*putting the ' + card_regex_piece + r' on top of the deck\.')
+royal_seal_putting_on_deck_regex = re.compile(prefix_piece + r'putting the ' + card_regex_piece + r' on top of the deck\.')
 
 # Tournament
 #  player
 #  discard: Card discarded
 #  gain: Card gained
-tournament_gain_prize_regex = re.compile(r'\s*(?:\.{3} )*(?P<player>.+) discards an? ' + card_regex_piece_formatable.format('discard') + r' and gains an? ' + card_regex_piece_formatable.format('gain') + r' on the deck\.')
+tournament_gain_prize_regex = re.compile(prefix_piece + r'(?P<player>.+) discards an? ' + card_regex_piece_formatable.format('discard') + r' and gains an? ' + card_regex_piece_formatable.format('gain') + r' on the deck\.')
+
+# Bag of Gold
+#  card: Should be a Gold
+bag_of_gold_gain_gold_regex = re.compile(prefix_piece + r'gaining a ' + card_regex_piece + r' on the deck\.')
+
+# Only has 3 (n) cards (Goons, Militia, Ghost Ship, etc.)
+#  player
+#  cards: Number of cards
+only_has_n_cards_regex = re.compile(prefix_piece + r'(?P<player>.+) only has (?P<cards>\d+) cards?\.')
+
+# Reducing all costs by n (Princess, Highway)
+#  cost: How much everything is reduced by
+reducing_all_costs_regex = re.compile(prefix_piece + r'reducing all costs by \$(?P<cost>\d+)\.')
+
+# Bridge
+#  buys
+#  money
+#  cost: Reduction
+bridge_regex = re.compile(prefix_piece + r'getting \+(?P<buys>\d+) buys?, \+\$(?P<money>\d+), and reducing all costs by \$(?P<cost>\d+)\.')
+
+# Black Market
+#  cards
+black_market_draw_regex = re.compile(prefix_piece + r'drawing ' + card_list_regex_piece + r' from the <span class=card-none>Black Market</span> deck\.')
+#  player
+#  card
+#black_market_buy_regex = re.compile(prefix_piece + r'(?P<player>.+) buys a ' + card_regex_piece + r'\.')
+#  cards
+black_market_return_regex = re.compile(prefix_piece + r'returning ' + card_list_regex_piece + r' to the bottom of the <span class=card-none>Black Market</span> deck\.')
 
 
 
@@ -305,11 +355,14 @@ def foreach_card(cards, func):
     for card_match in card_count_regex.finditer(cards):
         count = parse_count(card_match.group('count'))
         card = sanitize_card(card_match.group('card'))
-        if count is not None:
-            for i in range(count):
+        if card: # Make sure this is a valid card (Young Witch adds <span class=bane-star>&diams;</span> to the supply, which gets pulled as a card
+            if count is not None:
+                for i in range(count):
+                    func(card)
+            else:
                 func(card)
-        else:
-            func(card)
+        elif card_match.group('card') != '&diams;':
+            print 'Unexpected card in card list: "{0}"'.format(card_match.group('card'))
             
 # Similar to foreach_card(), except it passes the count to the func as well as the card
 def foreach_cards(cards, func):
@@ -340,7 +393,7 @@ class isotropic_parser:
         match = self.regex(buy_card_regex, line)
         if match:
             self.assert_current_player(match.group('player'))
-            self.game.buy(match.group('card'))
+            self.game.buy(match.group('card'), match.group('player'))
             return True
             
         # Check for the cleanup phase
@@ -415,6 +468,13 @@ class isotropic_parser:
             self.game.add_vp(int(match.group('vp')))
             return True
         
+        # Check for money and vp
+        match = self.regex(get_money_vp_regex, line)
+        if match:
+            self.game.add_money(int(match.group('money')))
+            self.game.add_vp(int(match.group('vp')))
+            return True
+        
         # Check for discarding cards
         match = self.regex(discard_cards_regex, line)
         if match:
@@ -426,6 +486,18 @@ class isotropic_parser:
         if match:
             ##for i in range(int(match.group('cards'))):
             ##    self.game.discard(None, match.group('player'))
+            return True
+            
+        # Check for putting cards back on deck (I think several cards use this - Scheme so far)
+        match = self.regex(put_cards_on_deck_regex, line)
+        if match:
+            ## Put each card back on the deck
+            return True
+            
+        # Check for putting n cards back on the deck
+        match = self.regex(put_count_on_deck_regex, line)
+        if match:
+            ## Put each card back on the deck
             return True
         
         # Check for gained cards
@@ -450,6 +522,12 @@ class isotropic_parser:
         match = self.regex(reveal_cards_regex, line)
         if match:
             # This doesn't do anything about the game state
+            return True
+            
+        # Check for doing nothing
+        match = self.regex(does_nothing_regex, line)
+        if match:
+            # This (obviously) does nothing to the game state
             return True
         
         
@@ -537,6 +615,41 @@ class isotropic_parser:
             self.game.gain(match.group('gain'), match.group('player'), 'supply' if match.group('gain') == 'Duchy' else 'prizes')
             return True
             
+        match = self.regex(bag_of_gold_gain_gold_regex, line)
+        if match:
+            # This card should be gained on the deck
+            self.game.gain(match.group('card'))
+            return True
+            
+        match = self.regex(only_has_n_cards_regex, line)
+        if match:
+            # This doesn't really mean anything to the game state
+            return True
+            
+        match = self.regex(reducing_all_costs_regex, line)
+        if match:
+            # All costs reduced by n, set this in the state
+            self.game.reduce_cost(int(match.group('cost')))
+            return True
+            
+        match = self.regex(bridge_regex, line)
+        if match:
+            # Adds a buy, a money, and reduces all costs
+            self.game.add_buys(int(match.group('buys')))
+            self.game.add_money(int(match.group('money')))
+            self.game.reduce_cost(int(match.group('cost')))
+            return True
+            
+        match = self.regex(black_market_draw_regex, line)
+        if match:
+            # Ignore this
+            return True
+            
+        match = self.regex(black_market_return_regex, line)
+        if match:
+            # Ignore this
+            return True
+            
             
             
         # Default return
@@ -601,6 +714,7 @@ class isotropic_parser:
         
         # Read the cards that will be in the supply
         cards_in_supply = self.next()
+        # Young Witch causes <span class=bane-star>&diams;</span> to be added as a 'card', but that will be filtered by the foreach_card
         foreach_card(cards_in_supply, lambda card: self.game.add_card_to_supply(card))
             
         self.next() # Skip line 5

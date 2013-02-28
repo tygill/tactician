@@ -162,6 +162,7 @@ class dominion_game:
         self.cards_bought = []
         self.copper_value = 1 # Coppersmith
         self.fools_gold_value = 1 # Fool's Gold
+        self.cost_reduction = 0
         
     # Game Initialization functions
     # -----------------------------
@@ -246,6 +247,7 @@ class dominion_game:
         
         self.copper_value = 1 # Coppersmith
         self.fools_gold_value = 1 # Fool's Gold (must be updated when a treasure card is 'played')
+        self.cost_reduction = 0 # Bridge, Princess, Highway
     
     # This should not be used for treasure cards with non-variable values (e.g., Copper, Quarry, etc.)
     # Treasure cards with variable costs should use this (e.g., Bank, Philosopher's Stone)
@@ -257,6 +259,9 @@ class dominion_game:
         
     def add_buys(self, buys = 1):
         self.buys += buys
+        
+    def reduce_cost(self, cost = 1):
+        self.cost_reduction += cost
     
     # Game Modifiers
     # ----
@@ -290,7 +295,7 @@ class dominion_game:
         # We'll see how the logs look.
         self.money += self.treasure_card_value(card)
         
-    def buy(self, card):
+    def buy(self, card, player = None, source = 'supply'):
         assert_card(card)
         # TODO: Should this decrement the available money based on the cost of the card bought?
         self.cards_bought.append(card)
@@ -305,7 +310,11 @@ class dominion_game:
         elif source == 'prizes':
             decr_value(self.prizes, card)
         else:
-            decr_value(self.supply, card)
+            # If this card is not in the supply it must be from the black market deck
+            if card in self.supply.keys():
+                decr_value(self.supply, card)
+            else:
+                assert 'Black Market' in self.supply.keys(), "Gaining card from 'supply' which is not in the supply, and Black Market is not in the supply."
         self.get_player(player).gain(card)
         
     def trash(self, card, player = None):
@@ -330,6 +339,9 @@ class dominion_game:
         else:
             # Otherwise, assume its the actual player object
             return player
+            
+    def is_card_in_supply(self, card):
+        return card in self.supply.keys()
     
     # Depending on the number of players, the victory card piles start with different sizes
     def victory_card_initial_supply(self, card):
@@ -485,7 +497,7 @@ add_action_card('Mine')
 add_action_card('Money Lender')
 add_action_card('Remodel')
 add_action_card('Smithy', 'Smithies')
-add_action_card('Spies')
+add_action_card('Spy', 'Spies')
 add_action_card('Thief', 'Thieves')
 add_action_card('Throne Room')
 add_action_card('Village')
