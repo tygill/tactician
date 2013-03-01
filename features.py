@@ -7,21 +7,66 @@ import os
 class feature_extractor:
     
     def __init__(self, filename):
+        self.file = open(filename, 'w')
         self.features = []
+        self.files_read = 0
+        self.instances = 0
         
-    def add_feature(self, func):
+        self.init_features()
+        
+    def close(self):
+        self.file.close()
+        
+    def init_features(self):
+        # Get a sorted list of all cards
+        sorted_cards = sorted(cards)
+        # Add the cards features
+        for card in sorted_cards:
+            self.add_card_in_supply_feature(card)
+            
+        # Add the ratio features
+        self.add_feature(lambda game: game.get_player().get_action_card_ratio(), "Deck Action Card Ratio")
+        self.add_feature(lambda game: game.get_player().get_victory_card_ratio(), "Deck Victory Card Ratio")
+        self.add_feature(lambda game: game.get_player().get_treasure_card_ratio(), "Deck Treasure Card Ratio")
+            
+            
+        # Add a separator
+        ##self.add_feature(lambda game: "Outputs")
+        
+        # This adds lots of more finely weighted output features
+        # Add the outputs (plural! a single, continuous output for every card that can be bought!)
+        ##for card in sorted_cards:
+        ##    self.add_card_output_feature(card)
+        
+    def add_feature(self, func, name):
+        self.file.write("Adding feature: {0}\n".format(name))
         self.features.append(func)
         
-    def add_card_feature(self, card):
-        self.add_feature(lambda game: 1 if game.is_card_in_supply(card) else 0)
+    def add_card_in_supply_feature(self, card):
+        self.add_feature(lambda game: 1 if game.is_card_in_supply(card) else 0, card)
+        
+    def add_card_output_feature(self, card):
+        self.add_feature(lambda game: game.calc_output_weight() if card in game.get_cards_bought() else 0, "Output: {0}".format(card))
         
     def parsing_line_handler(self, game, line_num, line):
         #print 'Parsing line: {0}'.format(line)
         pass
         
     def turn_complete_handler(self, game):
+        # Each card bought is a separate instance
+        if game.get_cards_bought():
+            for card_bought in game.get_cards_bought():
+                self.write_instance(game, card_bought)
+        else:
+            self.write_instance(game, 'None')
+        
+    def write_instance(self, game, output):
         # Extract the information from the current game state and log it
-        pass
+        for feature in self.features:
+            self.file.write(str(feature(game)) + ',')
+        # Write the output (its not a traditional feature!)
+        self.file.write('{0},{1}\n'.format(output, game.calc_output_weight()))
+        self.instances += 1
         
     def unhandled_line_handler(self, game, line_num, line):
         print '{0}: Unhandled line: {1}'.format(line_num, line.encode('utf-8'))
@@ -34,8 +79,7 @@ class feature_extractor:
             print '{0}: Unexpected line: {1}'.format(line_num, line.encode('utf-8'))
             
     def parse_complete_handler(self, game):
-        #print 'File complete.'
-        pass
+        self.files_read += 1
         
 if __name__ == '__main__':
     parser = isotropic_parser()
@@ -57,3 +101,5 @@ if __name__ == '__main__':
             if errors != 0:
                 print 'Unhandled lines in file: {0}'.format(file)
                 exit(0)
+    
+    features.close()

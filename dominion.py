@@ -84,11 +84,51 @@ class dominion_player:
         #self.in_play = {}
         # Island, Haven, Native Villiage, etc.
         #self.out_of_play = {}
-        self.cards_in_hand = 0
+        ##self.cards_in_hand = 0
         self.vp = 0
+        self.output_weight = None
+        self.action_card_ratio = 0
+        self.victory_card_ratio = 0
+        self.treasure_card_ratio = 0
         
     def set_final_score(self, score):
         self.final_score = score
+        
+    def get_final_score(self):
+        return self.final_score
+        
+    def set_output_weight(self, weight):
+        self.output_weight = weight
+        
+    def get_output_weight(self):
+        return self.output_weight
+        
+    def get_action_card_ratio(self):
+        return self.action_card_ratio
+        
+    def get_victory_card_ratio(self):
+        return self.victory_card_ratio
+        
+    def get_treasure_card_ratio(self):
+        return self.treasure_card_ratio
+        
+    def update_ratios(self):
+        actions = 0.0
+        victories = 0.0
+        treasures = 0.0
+        total = 0.0
+        for card in self.deck.keys():
+            cards = self.deck[card]
+            if is_action(card):
+                actions += cards
+            if is_victory(card):
+                victories += cards
+            if is_treasure(card):
+                treasures += cards
+            total += cards
+        self.action_card_ratio = actions / total
+        self.victory_card_ratio = victories / total
+        self.treasure_card_ratio = treasures / total
         
     # Game State Modifiers
     
@@ -104,28 +144,32 @@ class dominion_player:
         #if self.deck[card] == 0:
         #    self.reshuffle()
         #move_card(self.deck, self.hand, card)
-        if card is None or isinstance(card, basestring):
-            cards = 1
-        else:
-            cards = card
-        self.cards_in_hand += cards
+        ##if card is None or isinstance(card, basestring):
+        ##    cards = 1
+        ##else:
+        ##    cards = card
+        ##self.cards_in_hand += cards
+        pass
         
     def discard(self, card = None):
         #move_card(self.hand, self.discard_pile, card)
-        if card is None or isinstance(card, basestring):
-            cards = 1
-        else:
-            cards = card
-        self.cards_in_hand -= cards
+        ##if card is None or isinstance(card, basestring):
+        ##    cards = 1
+        ##else:
+        ##    cards = card
+        ##self.cards_in_hand -= cards
+        pass
         
     def cleanup(self):
         #move_cards(self.in_play, self.discard_pile) # Yes, this moves duration cards as well, but for out purposes this is fine.
         #move_cards(self.hand, self.discard_pile)
-        self.cards_in_hand = 0
+        ##self.cards_in_hand = 0
+        pass
         
     def play(self, card):
         #move_card(self.hand, self.in_play, card)
-        self.cards_in_hand -= 1
+        ##self.cards_in_hand -= 1
+        pass
         
     def gain(self, card):
         #incr_value(self.discard_pile, card)
@@ -175,6 +219,20 @@ class dominion_game:
         player = self.get_player(player)
         if player:
             player.set_final_score(score)
+        
+    # This calculates the score ratio for each player for the game
+    def calc_output_weight(self, player = None):
+        player = self.get_player(player)
+        if player.get_output_weight():
+            return player.get_output_weight()
+        else:
+            total = 0.0
+            for p in self.players.values():
+                total += p.get_final_score()
+            average = total / self.num_players
+            weight = (player.get_final_score() - average) / average
+            player.set_output_weight(weight)
+            return weight
             
     def add_empty_pile(self, pile):
         assert is_card(pile), "Empty pile is not a valid card type: {0}".format(pile)
@@ -237,6 +295,9 @@ class dominion_game:
         # If the turn number is None, then we don't modify it. We leave it what it was before.
         if turn_number is not None:
             self.turn_number = turn_number
+            
+        # Update the ratios in the current players deck
+        self.get_player().update_ratios()
         
         self.money = 0 # Current money
         self.actions = 1
@@ -339,6 +400,12 @@ class dominion_game:
         else:
             # Otherwise, assume its the actual player object
             return player
+            
+    def get_num_players(self):
+        return self.num_players
+        
+    def get_cards_bought(self):
+        return self.cards_bought
             
     def is_card_in_supply(self, card):
         return card in self.supply.keys()
