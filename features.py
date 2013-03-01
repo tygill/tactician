@@ -102,7 +102,7 @@ if __name__ == '__main__':
             print 'Parsing: {0}'.format(file)
             errors = parser.read(file)
             if errors > 0:
-                print 'Unhandled lines in file: {0}'.format(file)
+                print '{0} unhandled lines in file: {1}'.format(errors, file)
                 exit(0)
             elif errors < 0:
                 print 'Aborting: {0}'.format(abort_string(errors))
