@@ -42,10 +42,11 @@ first_line_regex = re.compile(r'<html><head><link rel="stylesheet" href="/semist
 # Matches: Player lines in the second section of the log
 #  place: Rank in game
 #  player: Name of player
-#  score: Players final score
-#  cards: List of cards and counts (can be extraced with card_count_regex)
+#  score: Players final score (None, if they resigned)
+#  cards: List of cards and counts (can be extraced with card_count_regex) (None, if the resigned)
 #  turns: Number of turns the player had
-player_first_line_regex = re.compile(r'<b>#(?P<place>\d) (?P<player>.+)</b>: (?P<score>[\d\-]+) points \(' + card_list_regex_piece + r'\); (?P<turns>\d+) turns')
+#  resigned: Order of resignation
+player_first_line_regex = re.compile(r'<b>#(?P<place>\d) (?P<player>.+)</b>: (?:(?P<score>[\d\-]+) points \(' + card_list_regex_piece + r'\)|resigned \((?P<resigned>\d+)\w+\)); (?P<turns>\d+) turns')
 # Matches: (admittedly, card_regex could just be run on the whole line with the same result...)
 #  card_one, card_two
 player_second_line_regex = re.compile(r'\s*opening: (?P<card_one>.+) / (?P<card_two>.+)')
@@ -332,6 +333,18 @@ turn_complete_event = 'turn_complete' # No args
 unhandled_line_event = 'unhandled_line' # Two arg (line_num, line)
 unexpected_line_event = 'unexpected_line' # Three arg (line_num, line and regex [regex may be None])
 parse_complete_event = 'parse_complete' # No args
+
+# Reasons for aborting
+single_player_abort = -1
+resignation_abort = -2
+
+def abort_string(abort):
+    if abort == single_player_abort:
+        return "Single Player Game"
+    elif abort == resignation_abort:
+        return "Player Resigned"
+    else:
+        return "Unknown Reason"
 
 # Parses an extracted count into a number
 def parse_count(count):
@@ -668,6 +681,8 @@ class isotropic_parser:
     
     def __init__(self):
         self.event_handlers = {}
+        self.allow_single_player_games = False
+        self.allow_games_with_resign = False
         
     def register_handler(self, event, handler):
         self.event_handlers[event] = handler
@@ -690,11 +705,18 @@ class isotropic_parser:
         self.unhandled_lines = 0
         self.line_num = 0
         self.players = [] # cache list of players for regex player validation
+        self.abort = False
         
         self.read_header()
-        self.read_scores()
-        self.read_game()
-        return self.unhandled_lines # Return the number of lines that were not matched
+        if not self.abort:
+            self.read_scores()
+        if not self.abort:
+            self.read_game()
+        self.file.close()
+        if not self.abort:
+            return self.unhandled_lines # Return the number of lines that were not matched
+        else:
+            return self.abort # Aborting means this file should be skipped, as it is invalid for some reason (single player, players resigned, unprocessed cards)
         
     def read_header(self):
         # Get some game metadata from the first line
@@ -708,6 +730,10 @@ class isotropic_parser:
             
         # Get the piles that signalled the end of the game
         empty_piles = self.next() # Read the line with the ending conditions
+        # If this line says that the ending condition was people resigning, then abort
+        if (empty_piles == 'All but one player has resigned.' or empty_piles == 'You have resigned.') and not self.allow_games_with_resign:
+            self.abort = resignation_abort
+            return
         foreach_card(empty_piles, lambda card: self.game.add_empty_pile(sanitize_card(card)))
             
         self.next() # Skip line 3
@@ -730,10 +756,17 @@ class isotropic_parser:
             player_first_line = self.next() # Read the player first line (points)
             # If this line is the separator, we have read all the players
             if player_first_line == separator:
+                # If only a single player was found, abort. We won't process single player games.
+                if self.game.get_num_players() <= 1 and not self.allow_single_player_games:
+                    self.abort = single_player_abort
                 return
             
             match = player_first_line_regex.match(player_first_line)
             if match:
+                resigned = match.group('resigned')
+                if resigned and not self.allow_games_with_resign:
+                    self.abort = resignation_abort
+                    return
                 place = int(match.group('place'))
                 player = match.group('player')
                 score = int(match.group('score'))
@@ -816,7 +849,9 @@ class isotropic_parser:
         
         # Read each turn (read_turn() returns true until there's no more turns to read - thanks <brmoneyags)
         while (self.read_turn()):
-            pass
+            # If the turn spawned an abort error, bail out
+            if self.abort:
+                return
             
         #print 'Parsing complete.'
         self.handle_event(parse_complete_event)

@@ -9,7 +9,7 @@ class feature_extractor:
     def __init__(self, filename):
         self.file = open(filename, 'w')
         self.features = []
-        self.files_read = 0
+        self.files = 0
         self.instances = 0
         
         self.init_features()
@@ -79,7 +79,7 @@ class feature_extractor:
             print '{0}: Unexpected line: {1}'.format(line_num, line.encode('utf-8'))
             
     def parse_complete_handler(self, game):
-        self.files_read += 1
+        self.files += 1
         
 if __name__ == '__main__':
     parser = isotropic_parser()
@@ -91,6 +91,9 @@ if __name__ == '__main__':
     parser.register_handler(parse_complete_event, features.parse_complete_handler)
     
     log_path = 'games'
+    abort_path = 'ignored_games'
+    if not os.path.exists(abort_path):
+        os.makedirs(abort_path)
     # Iterate over all files in the log path
     # http://stackoverflow.com/questions/120656/directory-listing-in-python
     for dirname, dirnames, filenames in os.walk(log_path):
@@ -98,8 +101,14 @@ if __name__ == '__main__':
             file = os.path.join(dirname, filename)
             print 'Parsing: {0}'.format(file)
             errors = parser.read(file)
-            if errors != 0:
+            if errors > 0:
                 print 'Unhandled lines in file: {0}'.format(file)
                 exit(0)
+            elif errors < 0:
+                print 'Aborting: {0}'.format(abort_string(errors))
+                print 'Moving {0} to {1}'.format(filename, abort_path)
+                os.rename(file, os.path.join(abort_path, filename))
     
     features.close()
+    print 'Finished building features.'
+    print 'Built {0} instances from {1} files.'.format(features.instances, files)
