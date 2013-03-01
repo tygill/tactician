@@ -1,6 +1,7 @@
 # The downloaded game logs don't need to be synced through git
 gamelogs/*
 games/*
+ignored/*
 
 # Vim backup and swap files
 *~

@@ -91,7 +91,7 @@ if __name__ == '__main__':
     parser.register_handler(parse_complete_event, features.parse_complete_handler)
     
     log_path = 'games'
-    abort_path = 'ignored_games'
+    abort_path = 'ignored'
     if not os.path.exists(abort_path):
         os.makedirs(abort_path)
     # Iterate over all files in the log path
