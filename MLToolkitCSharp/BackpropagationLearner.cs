@@ -69,6 +69,7 @@ namespace MLToolkitCSharp
             int epochCount = 0;
             double accuracy = measureAccuracy(validationFeatures, validationLabels, new Matrix());
             Plot trainMisclassPlot = null;
+            /*
             if (m_plotter != null)
             {
                 trainMisclassPlot = new Plot("Training Set Misclassification Rate vs. Epochs");
@@ -80,7 +81,9 @@ namespace MLToolkitCSharp
                 trainMisclassPlot.addDataPoint(epochCount, 1 - accuracy);
                 m_plotter.addPlot(trainMisclassPlot);
             }
+            */
             Plot misclassificationPlot = null;
+            /*
             if (m_plotter != null)
             {
                 misclassificationPlot = new Plot("Validation Set Misclassification Rate vs. Epochs");
@@ -92,15 +95,26 @@ namespace MLToolkitCSharp
                 misclassificationPlot.addDataPoint(epochCount, 1 - accuracy);
                 m_plotter.addPlot(misclassificationPlot);
             }
+            */
             Plot msePlot = null;
             if (m_plotter != null)
             {
-                msePlot = new Plot("Mean Squared Error vs. Epochs");
+                msePlot = new Plot("Training Set MSE vs. Epochs");
                 msePlot.XLabel = "Epochs Completed";
                 msePlot.XMin = 0;
-                msePlot.YLabel = "MSE";
+                msePlot.YLabel = "Mean Squared Error";
                 msePlot.addDataPoint(epochCount, calculateMeanSquaredError(validationFeatures, validationLabels));
                 m_plotter.addPlot(msePlot);
+            }
+            Plot msePlot2 = null;
+            if (m_plotter != null)
+            {
+                msePlot2 = new Plot("Validation Set MSE vs. Epochs");
+                msePlot2.XLabel = "Epochs Completed";
+                msePlot2.XMin = 0;
+                msePlot2.YLabel = "Mean Squared Error";
+                msePlot2.addDataPoint(epochCount, calculateMeanSquaredError(validationFeatures, validationLabels));
+                m_plotter.addPlot(msePlot2);
             }
             while (steadyEpochs < 50)
             {
@@ -155,7 +169,9 @@ namespace MLToolkitCSharp
                 if (misclassificationPlot != null)
                     misclassificationPlot.addDataPoint(epochCount, 1 - accuracy);
                 if (msePlot != null)
-                    msePlot.addDataPoint(epochCount, calculateMeanSquaredError(validationFeatures, validationLabels));
+                    msePlot.addDataPoint(epochCount, calculateMeanSquaredError(trainFeatures, trainLabels));
+                if (msePlot2 != null)
+                    msePlot2.addDataPoint(epochCount, calculateMeanSquaredError(validationFeatures, validationLabels));
                 if (trainMisclassPlot != null)
                     trainMisclassPlot.addDataPoint(epochCount, 1 - measureAccuracy(trainFeatures, trainLabels, null));
             }
