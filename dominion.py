@@ -190,6 +190,7 @@ class dominion_game:
         self.num_players = 0
         self.trash_pile = {}
         self.prizes = {}
+        self.embargoes = {}
         
         # Game meta-data
         self.empty_piles = []
@@ -198,6 +199,7 @@ class dominion_game:
         
         # Turn context
         self.current_player = None
+        self.possessee = None
         self.turn_number = 0
         self.money = 0
         self.actions = 1
@@ -281,6 +283,8 @@ class dominion_game:
         # Initialize the prizes (even if Tournament isn't in play. It might be in the Black Market deck or something. No harm in setting it up.)
         for card in prize_cards:
             self.prizes[card] = 1
+        # Reset the embargoes
+        self.embargoes = {}
                 
                 
     # Game state manipulation functions
@@ -290,8 +294,9 @@ class dominion_game:
     # ----
     
     # Resets all the turn context variables
-    def start_new_turn(self, player, turn_number = None):
+    def start_new_turn(self, player, turn_number = None, possessee = None):
         self.current_player = player
+        self.possessee = possessee
         # If the turn number is None, then we don't modify it. We leave it what it was before.
         if turn_number is not None:
             self.turn_number = turn_number
@@ -360,14 +365,19 @@ class dominion_game:
         assert_card(card)
         # TODO: Should this decrement the available money based on the cost of the card bought?
         self.cards_bought.append(card)
-        self.gain(card)
+        self.gain(card, player, source)
     
     # Gives a card from the supply to a player
     def gain(self, card, player = None, source = 'supply'):
         assert_card(card)
         self.cards_gained.append(card)
         if source == 'trash':
-            decr_value(self.trash_pile, card)
+            # If this is a Noble Brigand, then this is indeed the trash.
+            # However, Possession causes this to be called too (they are seemingly indistinguishable except by looking at the state)
+            # So, when there is a possessing player, any gains will be automatically redirected.
+            if not self.possessee:
+                decr_value(self.trash_pile, card)
+                return
         elif source == 'prizes':
             decr_value(self.prizes, card)
         else:
@@ -381,10 +391,19 @@ class dominion_game:
     def trash(self, card, player = None):
         assert_card(card)
         incr_value(self.trash_pile, card)
+        if self.possessee:
+            player = self.get_player(player)
+            possessee = self.get_player(self.possessee)
+            # If the player who would trash something is the player who is being possessed, don't trash anything
+            if player is possessee:
+                return
         self.get_player(player).trash(card)
         
     def add_vp(self, vp = 1, player = None):
         self.get_player(player).add_vp(vp)
+        
+    def embargo(self, card):
+        incr_value(self.embargoes, card)
                 
     # Utility methods
     # ---------------

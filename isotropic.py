@@ -20,8 +20,9 @@ card_count_regex = re.compile('(?:(?P<count>[an\d]+) )?<[\\w=\\-"\' ]+>(?P<card>
 # Card list regex piece. This regex is never used, but the pieces of it are used in many other regexes.
 #  cards
 #card_list_regex = re.compile('(?P<cards>(?:(?:\d+|an?) <[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>,? ?)+(?:(?:and )?(?:\d+|an?) <[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>)?)')
-card_list_regex_piece = u'(?P<cards>(?:(?:\d+|an?) (?:<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>|\u25BC),? ?)+(?:(?:and )?(?:\d+|an?) (?:<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>|\u25BC))?)'
-card_list_no_count_regex_piece = '(?P<cards>(?:<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>,? ?)+(?:(?:and )?<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>)?)'
+# Added the 'and then' clause for Venture
+card_list_regex_piece = u'(?P<cards>(?:(?:\d+|an?|the) (?:<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>|\u25BC),? ?)+(?:(?:and )?(?:\d+|an?) (?:<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>|\u25BC))?(?:(?: and then )?(?:\d+|an?) (?:<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>|\u25BC))?|nothing)'
+card_list_no_count_regex_piece = '(?P<cards>(?:<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>,? ?)+(?:(?:and )?<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>)?(?:(?: and then )?<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>)?|nothing)'
 
 # Matches the prefix to the line (the ...s)
 prefix_piece = r'\s*(?:\.{3} )*'
@@ -135,7 +136,7 @@ def add_game_regex(regex_string, matcher = None):
 # These are here to allow them to be used in callbacks
 # Parses an extracted count into a number
 def parse_count(count):
-    if count == 'a' or count == 'an': # or count == 'the' # Does the ever get used?
+    if count == 'a' or count == 'an' or count == 'the': # The is used when a list of a single item is used (for example, trashing the Embargo)
         return 1
     elif count is not None:
         return int(count)
@@ -180,6 +181,21 @@ add_game_regex(r'(?:(?P<player>.+) )?play(?:ing|s) ' + card_list_regex_piece + r
 
 # Matches: <player> buys a <card>.
 add_game_regex(r'(?P<player>.+) buys an? ' + card_regex_piece + r'\.', lambda game, match, player: game.buy(match.group('card'), player))
+
+# Matches: ... [<player>] gain[ing|s] a <card>[ in/on (top of )? the <where>hand/deck].
+add_game_regex(r'(?:(?P<player>.+) )?gain(?:ing|s) an? ' + card_regex_piece + r'(?: [io]n (?:top of )?(?:the )?(?P<where>hand|deck))?\.', lambda game, match, player: game.gain(match.group('card'), player))
+
+# Matches: ... There's nothing for <player> to gain.
+add_game_regex(r"There's nothing for (?P<player>.+) to gain\.")
+
+# Matches: ... <player> gain[ing|s] nothing.
+add_game_regex(r'(?:(?P<player>.+) )?gain(?:ing|s) nothing\.')
+
+# Matches: ... [<player>] trash[ing|es] <cards>.
+add_game_regex(r'(?:(?P<player>.+) )?trash(?:ing|es) ' + card_list_regex_piece + r'\.', lambda game, match, player: foreach_card(match.group('cards'), lambda card: game.trash(card, player)))
+
+# Matches: ... <player> trashes nothing.
+add_game_regex(r'(?P<player>.+) trashes nothing\.')
 
 # Matches: (<player> reshuffles.)
 add_game_regex(r'\((?P<player>.+) reshuffles\.\)')
@@ -245,23 +261,20 @@ add_game_regex(r'(?:making )?(?:(?P<player>.+) )?discard(?:ing|s|) ' + card_list
 # Matches: ... <player> discards [n|a] cards.
 add_game_regex(r'(?:(?P<player>.+) )?discard(?:ing|s) (?P<cards>[\d|a]+) cards?\.')
 
+# Matches: ... discarding n cards and getting +n buy.
+add_game_regex(r'discarding (?P<cards>\d+) cards? and getting \+(?P<buys>\d+) buys?\.', default_matcher)
+
+# Matches: ... discarding (n cards?|nothing) and getting +$n.
+add_game_regex(r'discarding (?:(?P<cards>\d+) cards?|nothing) and getting \+\$(?P<money>\d+)\.', default_matcher)
+
+# Matches: ... discarding <cards> and getting +$n.
+add_game_regex(r'discarding ' + card_list_regex_piece + r' and getting \+\$(?P<money>\d+)\.', default_matcher)
+
 # Matches: ... [<player>] put[ting|s] <cards> back on the deck.
 add_game_regex(r'(?:(?P<player>.+) )?put(?:ting|s) ' + card_list_regex_piece + r' back on the deck(?: \((?P<order>first on top)\))?\.')
 
 # Matches: ... [<player>] put[ting|s] [n|a] cards back on the deck[ (first on top)].
 add_game_regex(r'(?:(?P<player>.+) )?put(?:ting|s) (?P<cards>[\da]+) cards? back on the deck\.')
-
-# Matches: ... [<player>] gain[ing|s] a <card>[ in/on the <where>hand/deck].
-add_game_regex(r'(?:(?P<player>.+) )?gain(?:ing|s) an? ' + card_regex_piece + r'(?: [io]n (?:the )?(?P<where>hand|deck))?\.', lambda game, match, player: game.gain(match.group('card'), player))
-
-# Matches: ... There's nothing for <player> to gain.
-add_game_regex(r"There's nothing for (?P<player>.+) to gain\.")
-
-# Matches: ... [<player>] trash[ing|es] <cards>.
-add_game_regex(r'(?:(?P<player>.+) )?trash(?:ing|es) ' + card_list_regex_piece + r'\.', lambda game, match, player: foreach_card(match.group('cards'), lambda card: game.trash(card, player)))
-
-# Matches: ... <player> trashes nothing.
-add_game_regex(r'(?P<player>.+) trashes nothing\.')
 
 # Matches: ... <player> does nothing.
 add_game_regex(r'(?P<player>.+) does nothing\.')
@@ -302,7 +315,7 @@ add_game_regex(r'discarding the top card of the deck\.')
 add_game_regex(r'(?P<player>.+) reveals and discards ' + card_list_regex_piece + r'\.')
 # Matches: ... <player> draws and reveals <cards>, trashing a <card>.
 add_game_regex(r'(?P<player>.+) draws and reveals ' + card_list_regex_piece + r', trashing an? ' + card_regex_piece + r'\.', lambda game, match, player: game.trash(match.group('card'), player))
-# Matches: ... <player> gains the <card>.
+# Matches: ... <player> gains the <card>. (Possession also makes this show up when buying/gaining occurs. If there is a possessing player, buys and gains are ignored.)
 add_game_regex(r'(?P<player>.+) gains the ' + card_regex_piece + r'\.', lambda game, match, player: game.gain(match.group('card'), player, 'trash'))
 
 # Mining Village (slightly more generic than mining village requires, might catch other cards.)
@@ -316,7 +329,7 @@ add_game_regex(r'trashing the ' + card_regex_piece + r' for \+\$(?P<money>\d+)\.
 # Matches: ... which is worth +$n [(n cards in deck, n cards in discard)].
 #  deck_size
 #  discard_size
-add_game_regex(r'which is worth \+\$(?P<money>\d+)(?: \((?P<deck_size>\d+) cards in deck, (?P<discard_size>\d+) cards in discard\))?\.', default_matcher)
+add_game_regex(r'which is worth \+\$(?P<money>\d+)(?: \((?:(?P<deck_size>\d+) cards|nothing) in deck, (?:(?P<discard_size>\d+) cards|nothing) in discard\))?\.', default_matcher)
 
 # Royal Seal
 # Matches: ... putting the <card> on top of the deck.
@@ -376,6 +389,40 @@ add_game_regex(r'putting it on the deck\.')
 # Walled Village
 # Matches: ... <player> returns a <card> to the top of the deck.
 add_game_regex(r'(?P<player>.+) returns a ' + card_regex_piece + r' to the top of the deck\.')
+
+# Embargo
+# Matches: ... embargoing the <card>.
+add_game_regex(r'embargoing the ' + card_regex_piece + r'\.', lambda game, match, player: game.embargo(match.group('card')))
+
+# Alchemist
+# Matches: ... <player> returns <cards> to the top of the deck.
+add_game_regex(r'(?P<player>.+) returns ' + card_list_regex_piece + r' to the top of the deck\.')
+
+# Venture (revealing and discarding is handled by the basic handlers, as it gets broken into three lines - the reveal, the discard, and the play.)
+# Matches: revealing and playing <cards>.
+add_game_regex(r'revealing and playing ' + card_list_regex_piece + r'\.', lambda game, match, player: foreach_card(match.group('cards'), lambda card: game.play(card)))
+
+# Native Village
+# Matches: ... drawing a card and placing it on the <span class=card-none>Native Village</span> mat.
+add_game_regex(r'drawing a card and placing it on the <span class=card-none>Native Village</span> mat\.')
+# Matches: ... picking up n cards from the <span class=card-none>Native Village</span> mat.
+add_game_regex(r'picking up (?P<cards>\d+) cards? from the <span class=card-none>Native Village</span> mat.')
+
+# Haven
+# Matches: ... setting aside a card.
+add_game_regex(r'setting aside a card\.')
+# Matches: ... <player> picks up a card that was set aside.
+add_game_regex(r'(?P<player>.+) picks up a card that was set aside\.')
+
+# Vault
+# Matches: ... <player> doesn't discard any cards.
+add_game_regex(r"(?P<player>.+) doesn't discard any cards\.")
+
+# Sea Hag
+# Matches: ... <player> draws and discards <cards>.
+add_game_regex(r'(?P<player>.+) draws and discards ' + card_list_regex_piece + r'\.')
+
+
 
 
 
@@ -685,7 +732,8 @@ class isotropic_parser:
             match = possessed_turn_header_regex.match(turn_first_line)
             if match:
                 player = match.group('possessor')
-                self.game.start_new_turn(player)
+                possessee = match.group('possessee')
+                self.game.start_new_turn(player, possessee=possessee)
             else:
                 match = outpost_turn_header_regex.match(turn_first_line)
                 if match:
