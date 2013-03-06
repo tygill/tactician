@@ -206,9 +206,12 @@ class dominion_game:
         self.buys = 1
         self.cards_gained = []
         self.cards_bought = []
+        self.other_player = None # Used to store state for Watchtower
+        self.other_player_gained = None # Used to store state for Watchtower
         self.copper_value = 1 # Coppersmith
         self.fools_gold_value = 1 # Fool's Gold
         self.cost_reduction = 0
+        self.revealed = []
         
     # Game Initialization functions
     # -----------------------------
@@ -310,10 +313,14 @@ class dominion_game:
         
         del self.cards_gained[:]
         del self.cards_bought[:]
+        self.other_player = None
+        self.other_player_gained = None
         
         self.copper_value = 1 # Coppersmith
         self.fools_gold_value = 1 # Fool's Gold (must be updated when a treasure card is 'played')
         self.cost_reduction = 0 # Bridge, Princess, Highway
+        
+        self.reset_revealed()
     
     # This should not be used for treasure cards with non-variable values (e.g., Copper, Quarry, etc.)
     # Treasure cards with variable costs should use this (e.g., Bank, Philosopher's Stone)
@@ -370,7 +377,14 @@ class dominion_game:
     # Gives a card from the supply to a player
     def gain(self, card, player = None, source = 'supply'):
         assert_card(card)
-        self.cards_gained.append(card)
+        if self.current_player: # If the game's started
+            if self.get_player() is self.get_player(player):
+                self.cards_gained.append(card)
+            else:
+                # Another player gained a card.
+                # Store the most recent gained card here for Watchtower (to trash it)
+                self.other_player = self.get_player(player)
+                self.other_player_gained = card
         if source == 'trash':
             # If this is a Noble Brigand, then this is indeed the trash.
             # However, Possession causes this to be called too (they are seemingly indistinguishable except by looking at the state)
@@ -390,6 +404,12 @@ class dominion_game:
         
     def trash(self, card, player = None):
         assert_card(card)
+        # If a watchtower was revealed just before this,
+        if player is None and len(self.revealed) == 1 and self.revealed[0] == 'Watchtower':
+            # The card being trashed should match the card that was being gained before
+            assert self.other_player_gained == card, "Redirecting trashing a {0} to player '{1}' after Watchtower: Expected {2}".format(card, self.other_player, self.other_player_gained)
+            # Then this card should be trashed by another player
+            player = self.other_player
         incr_value(self.trash_pile, card)
         if self.possessee:
             player = self.get_player(player)
@@ -404,6 +424,19 @@ class dominion_game:
         
     def embargo(self, card):
         incr_value(self.embargoes, card)
+        
+    def reset_revealed(self):
+        self.revealed = []
+        
+    # Used by Ambassador to return a card from a player's deck to the supply
+    def return_to_supply(self, card, player = None):
+        assert_card(card)
+        self.get_player(player).trash(card)
+        incr_value(self.supply, card)
+        
+    def reveal(self, card):
+        assert_card(card)
+        self.revealed.append(card)
                 
     # Utility methods
     # ---------------
@@ -428,6 +461,9 @@ class dominion_game:
             
     def is_card_in_supply(self, card):
         return card in self.supply.keys()
+        
+    def get_revealed(self):
+        return self.revealed
     
     # Depending on the number of players, the victory card piles start with different sizes
     def victory_card_initial_supply(self, card):
@@ -666,7 +702,7 @@ add_action_card('Rabble')
 add_action_card('Trade Route')
 add_action_card('Vault')
 add_action_card('Venture')
-add_action_card('Watch Tower')
+add_action_card('Watchtower')
 add_action_card('Worker\'s Village')
 
 add_action_card('Farming Village')

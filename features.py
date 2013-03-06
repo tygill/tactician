@@ -74,7 +74,7 @@ class feature_extractor:
     def unexpected_line_handler(self, game, line_num, line, regex = None):
         print
         if regex:
-            print '{0}: Unexpected line: {1} (Expected: {2})'.format(line_num, line.encode('utf-8'), regex)
+            print '{0}: Unexpected line: {1} (Expected: {2})'.format(line_num, line.encode('utf-8'), regex.encode('utf-8'))
         else:
             print '{0}: Unexpected line: {1}'.format(line_num, line.encode('utf-8'))
             
@@ -100,14 +100,17 @@ if __name__ == '__main__':
         for filename in filenames:
             file = os.path.join(dirname, filename)
             print 'Parsing: {0}'.format(file)
-            errors = parser.read(file)
-            if errors > 0:
-                print '{0} unhandled lines in file: {1}'.format(errors, file)
+            error = parser.read(file)
+            if error > 0:
+                print '{0} unhandled lines in file: {1}'.format(error, file)
                 exit(0)
-            elif errors < 0:
-                print 'Aborting: {0}'.format(abort_string(errors))
-                print 'Moving {0} to {1}'.format(filename, abort_path)
-                os.rename(file, os.path.join(abort_path, filename))
+            elif error < 0:
+                print 'Aborting: {0}'.format(abort_string(error))
+                if error != assertion_abort:
+                    print 'Moving {0} to {1}'.format(filename, abort_path)
+                    os.rename(file, os.path.join(abort_path, filename))
+                else:
+                    exit(0)
     
     features.close()
     print 'Finished building features.'
