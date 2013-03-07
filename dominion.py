@@ -69,12 +69,33 @@ def move_cards(a, b):
         else:
             b[key] = a[key]
         a[key] = 0
+        
+def print_deck(deck):
+    for card in deck.keys():
+        print '{1} {0}(s)'.format(card, deck[card])
+        
+def compare_decks(expected, actual):
+    ret = []
+    # Make sure everything that was expected is there
+    for (card, count) in expected.iteritems():
+        if card not in actual:
+            ret.append('{0}: Expected {1} Found None'.format(card, count))
+        else:
+            # The expected card was found in the actual deck, check counts
+            if count != actual[card]:
+                ret.append('{0}: Expected {1} Found {2}'.format(card, count, actual[card]))
+    # Look for cards that are there that shouldn't be
+    for (card, count) in actual.iteritems():
+        if card not in expected and count > 0:
+            ret.append('{0}: Unexpected {1}'.format(card, count))
+    return ret
     
 class dominion_player:
     
     def __init__(self, game, name):
         self.game = game
         self.name = name
+        self.final_deck = {}
         # Piles are implemented as a dictionary from card names to how many of them are in the pile
         # Because drawing doesn't tell us exactly what they drew, this will now just hold the deck.
         self.deck = {}
@@ -96,6 +117,18 @@ class dominion_player:
         
     def get_final_score(self):
         return self.final_score
+        
+    def add_final_deck(self, card):
+        incr_value(self.final_deck, card)
+        
+    def check_deck(self):
+        ret = []
+        errors = compare_decks(self.final_deck, self.deck)
+        if errors:
+            ret.append('Mismatch in player deck: {0}'.format(self.name))
+            for error in errors:
+                ret.append(' {0}'.format(error))
+        return ret
         
     def set_output_weight(self, weight):
         self.output_weight = weight
@@ -192,6 +225,8 @@ class dominion_game:
         self.prizes = {}
         self.embargoes = {}
         
+        self.final_trash = {}
+        
         # Game meta-data
         self.empty_piles = []
         self.winner = None
@@ -199,7 +234,7 @@ class dominion_game:
         
         # Turn context
         self.current_player = None
-        self.possessee = None
+        self.possessor = None
         self.turn_number = 0
         self.money = 0
         self.actions = 1
@@ -209,7 +244,9 @@ class dominion_game:
         self.other_player = None # Used to store state for Watchtower
         self.other_player_gained = None # Used to store state for Watchtower
         self.copper_value = 1 # Coppersmith
-        self.fools_gold_value = 1 # Fool's Gold
+        self.noble_brigand_gain_pending = False
+        #self.fools_gold_value = 1 # Fool's Gold
+        self.prohibited = [] # Prohibited cards (Contraband)
         self.cost_reduction = 0
         self.revealed = []
         
@@ -224,6 +261,16 @@ class dominion_game:
         player = self.get_player(player)
         if player:
             player.set_final_score(score)
+            
+    def add_final_deck(self, card, player):
+        assert_card(card)
+        player = self.get_player(player)
+        if player:
+            player.add_final_deck(card)
+        
+    def add_final_trash(self, card):
+        assert_card(card)
+        incr_value(self.final_trash, card)
         
     # This calculates the score ratio for each player for the game
     def calc_output_weight(self, player = None):
@@ -288,6 +335,26 @@ class dominion_game:
             self.prizes[card] = 1
         # Reset the embargoes
         self.embargoes = {}
+        
+    def validate_final_state(self):
+        ret = []
+        # Validate that the empty piles are empty
+        # Note that this can't check the non-empty piles.
+        for card in self.empty_piles:
+            if self.supply[card] != 0:
+                ret.append('Mismatch: {0} supply pile should be empty - has {1} left'.format(card, self.supply[card]))
+        # Validate the trash
+        errors = compare_decks(self.final_trash, self.trash_pile)
+        if errors:
+            ret.append('Mismatch in trash pile')
+            for error in errors:
+                ret.append(' {0}'.format(error))
+        # Validate each players final deck
+        for (name, player) in self.players.iteritems():
+            errors = player.check_deck()
+            for error in errors:
+                ret.append(error)
+        return ret
                 
                 
     # Game state manipulation functions
@@ -297,9 +364,9 @@ class dominion_game:
     # ----
     
     # Resets all the turn context variables
-    def start_new_turn(self, player, turn_number = None, possessee = None):
+    def start_new_turn(self, player, turn_number = None, possessor = None):
         self.current_player = player
-        self.possessee = possessee
+        self.possessor = possessor
         # If the turn number is None, then we don't modify it. We leave it what it was before.
         if turn_number is not None:
             self.turn_number = turn_number
@@ -317,8 +384,9 @@ class dominion_game:
         self.other_player_gained = None
         
         self.copper_value = 1 # Coppersmith
-        self.fools_gold_value = 1 # Fool's Gold (must be updated when a treasure card is 'played')
+        #self.fools_gold_value = 1 # Fool's Gold (must be updated when a treasure card is 'played')
         self.cost_reduction = 0 # Bridge, Princess, Highway
+        del self.prohibited[:]
         
         self.reset_revealed()
     
@@ -335,6 +403,13 @@ class dominion_game:
         
     def reduce_cost(self, cost = 1):
         self.cost_reduction += cost
+    
+    def set_copper_value(self, value = 1):
+        self.copper_value = value
+        
+    def prohibit(self, card):
+        assert_card(card)
+        self.prohibited.append(card)
     
     # Game Modifiers
     # ----
@@ -367,16 +442,25 @@ class dominion_game:
         # At some point, some things might need to be processed here, but I don't know for sure now.
         # We'll see how the logs look.
         self.money += self.treasure_card_value(card)
+        # Remember when Noble Brigand is played for gain redirection from trash
+        self.noble_brigand_gain_pending = card == 'Noble Brigand'
         
     def buy(self, card, player = None, source = 'supply'):
         assert_card(card)
         # TODO: Should this decrement the available money based on the cost of the card bought?
         self.cards_bought.append(card)
+        if self.possessor and self.get_player() is self.get_player(player):
+            # Possessed players can't buy anything
+            # The possessor will gain the card on the next line.
+            return
         self.gain(card, player, source)
+        # Noble brigand's effect occurs on buy as well, so it might be pending after a buy too.
+        self.noble_brigand_gain_pending = card == 'Noble Brigand'
     
     # Gives a card from the supply to a player
     def gain(self, card, player = None, source = 'supply'):
         assert_card(card)
+        current = True # Assume the player gaining is the current controlling player (possessor in possession turns)
         if self.current_player: # If the game's started
             if self.get_player() is self.get_player(player):
                 self.cards_gained.append(card)
@@ -385,13 +469,19 @@ class dominion_game:
                 # Store the most recent gained card here for Watchtower (to trash it)
                 self.other_player = self.get_player(player)
                 self.other_player_gained = card
+                current = False
+        if self.possessor and current:
+            return
+        # Check the source of the card to be gained
         if source == 'trash':
             # If this is a Noble Brigand, then this is indeed the trash.
             # However, Possession causes this to be called too (they are seemingly indistinguishable except by looking at the state)
             # So, when there is a possessing player, any gains will be automatically redirected.
-            if not self.possessee:
+            if self.noble_brigand_gain_pending:
                 decr_value(self.trash_pile, card)
-                return
+            else:
+                # This is the possession case.
+                decr_value(self.supply, card)
         elif source == 'prizes':
             decr_value(self.prizes, card)
         else:
@@ -411,12 +501,7 @@ class dominion_game:
             # Then this card should be trashed by another player
             player = self.other_player
         incr_value(self.trash_pile, card)
-        if self.possessee:
-            player = self.get_player(player)
-            possessee = self.get_player(self.possessee)
-            # If the player who would trash something is the player who is being possessed, don't trash anything
-            if player is possessee:
-                return
+        # Cards trashed by possession are returned to the players deck at the end of their turn
         self.get_player(player).trash(card)
         
     def add_vp(self, vp = 1, player = None):
@@ -549,8 +634,9 @@ class dominion_game:
             return 1
         elif card == 'Cache':
             return 3
-        elif card == 'Fool\'s Gold':
-            return self.fools_gold_value
+        # Fool's Gold has a +$n line following it.
+        #elif card == 'Fool\'s Gold':
+        #    return self.fools_gold_value
         elif card == 'Ill-Gotten Gains':
             return 1
         elif card == 'Diadem':
@@ -783,7 +869,7 @@ add_victory_card('Estate')
 add_curse_card('Curse')
 
 # Promo Cards (I don't know if Stash is used, but the others are)
-add_treasure_card('Stash')
+add_treasure_card('Stash', 'Stashes')
 add_action_card('Envoy', 'Envoys')
 add_action_card('Governor')
 add_action_card('Walled Village')

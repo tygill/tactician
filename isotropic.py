@@ -23,7 +23,7 @@ card_count_regex = re.compile('(?:(?P<count>[thean\d]+) )?<[\\w=\\-"\' ]+>(?P<ca
 #  cards
 #card_list_regex = re.compile('(?P<cards>(?:(?:\d+|an?) <[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>,? ?)+(?:(?:and )?(?:\d+|an?) <[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>)?)')
 # Added the 'and then' clause for Venture
-card_list_regex_piece = '(?P<cards>(?:(?:\d+|an?|the) ' + card_regex_piece_no_name + ',? ?)+(?:(?:and )?(?:\d+|an?|the) ' + card_regex_piece_no_name + ')?(?:(?: and then )?(?:\d+|an?|the) ' + card_regex_piece_no_name + ')?|nothing)'
+card_list_regex_piece = '(?P<cards>(?:(?:the )?(?:\d+|an?|the) ' + card_regex_piece_no_name + ',? ?)+(?:(?:and )?(?:the )?(?:\d+|an?|the) ' + card_regex_piece_no_name + ')?(?:(?: and then )?(?:the )?(?:\d+|an?|the) ' + card_regex_piece_no_name + ')?|nothing)'
 card_list_no_count_regex_piece = '(?P<cards>(?:' + card_regex_piece_no_name + ',? ?)+(?:(?:and )?' + card_regex_piece_no_name + ')?(?:(?: and then )?' + card_regex_piece_no_name + ')?|nothing)'
 
 # Used to match the score list
@@ -183,13 +183,17 @@ def foreach_cards(cards, func):
 draw_hand_regex = add_game_regex(r"<span class=logonly>\((?P<player>.+)(?:\'s first hand| draws): " + card_list_regex_piece + r'\.\)</span>')
 
 # Matches: <player> plays <cards>.
-add_game_regex(r'(?:(?P<player>.+) )?play(?:ing|s) ' + card_list_regex_piece + r'(?: again)?\.', lambda game, match, player: foreach_card(match.group('cards'), lambda card: game.play(card)))
+add_game_regex(r'(?:and )?(?:(?P<player>.+) )?play(?:ing|s) ' + card_list_regex_piece + r'(?: again| a third time| first| second)?\.', lambda game, match, player: foreach_card(match.group('cards'), lambda card: game.play(card)))
 
 # Matches: <player> buys a <card>.
 add_game_regex(r'(?P<player>.+) buys an? ' + card_regex_piece + r'\.', lambda game, match, player: game.buy(match.group('card'), player))
 
 # Matches: ... [<player>] gain[ing|s] a <card>[ in/on (top of )? the <where>hand/deck].
 add_game_regex(r'(?:(?P<player>.+) )?gain(?:ing|s) an? ' + card_regex_piece + r'(?: [io]n (?:top of )?(?:the )?(?P<where>hand|deck)| and put(?:ting)? it on the deck)?\.', lambda game, match, player: game.gain(match.group('card'), player))
+
+# Noble Brigand (This was moved here because it needs to be run before the following regex.)
+# Matches: ... <player> gains the <card>. (Possession also makes this show up when buying/gaining occurs. If there is a possessing player, buys and gains are ignored.)
+add_game_regex(r'(?P<player>.+) gains the ' + card_regex_piece + r'\.', lambda game, match, player: game.gain(match.group('card'), player, 'trash'))
 
 # Matches: ... <player> gain[ing|s] n <cards> [on the deck].
 add_game_regex(r'(?:(?P<player>.+) )?gain(?:ing|s) ' + card_list_regex_piece + r'(?: on the deck)?\.', lambda game, match, player: foreach_card(match.group('cards'), lambda card: game.gain(card, player)))
@@ -346,8 +350,6 @@ add_game_regex(r'leaving the top card of the deck where it is\.')
 add_game_regex(r'(?P<player>.+) reveals and discards ' + card_list_regex_piece + r'\.')
 # Matches: ... <player> draws and reveals <cards>, trashing a <card>.
 add_game_regex(r'(?P<player>.+) draws and reveals ' + card_list_regex_piece + r', trashing an? ' + card_regex_piece + r'\.', lambda game, match, player: game.trash(match.group('card'), player))
-# Matches: ... <player> gains the <card>. (Possession also makes this show up when buying/gaining occurs. If there is a possessing player, buys and gains are ignored.)
-add_game_regex(r'(?P<player>.+) gains the ' + card_regex_piece + r'\.', lambda game, match, player: game.gain(match.group('card'), player, 'trash'))
 
 # Mining Village (slightly more generic than mining village requires, might catch other cards.)
 # Matches: ... trashing the <span class=card-none>Mining Village</span> for +$2.
@@ -407,7 +409,7 @@ def salvager_trash_regex(game, match, player):
     game.trash(match.group('card'), player)
     # Call the default matcher for money and buys
     default_matcher(game, match, player)
-add_game_regex(r'trashing an? ' + card_regex_piece + r' for \+\$(?P<money>\d+) and \+(?P<buys>\d+) buys?\.')
+add_game_regex(r'trashing an? ' + card_regex_piece + r' for \+\$(?P<money>\d+) and \+(?P<buys>\d+) buys?\.', salvager_trash_regex)
 
 # Scrying Pool (discarding is built into the main discarder)
 # Matches: ... letting <player> keep a <card>.
@@ -503,6 +505,8 @@ add_game_regex(r'(?P<player>.+) reveals a Bane card \(an? ' + card_regex_piece +
 # Tactician
 # Matches: ... discarding the hand (n cards).
 add_game_regex(r'discarding the hand \((?P<cards>\d+) cards\)\.')
+# Matches: ... but has no cards to discard.
+add_game_regex(r'but has no cards to discard\.')
 
 # Tunnel
 # Matches: ... revealing a <reveal> and gaining a <gain>.
@@ -535,9 +539,13 @@ add_game_regex(r'(?P<player>.+) draws and reveals ' + card_list_regex_piece + r'
 # Matches: ... [<other_player> makes] <player> [puts them back on the deck/discards them].
 add_game_regex(r'(?:(?P<other_player>.+) makes )?(?P<player>.+) (?:puts them back on the deck|discards? them)\.')
 
-# Throne Room / King's Court
+# Throne Room
 # Matches: ... but has no action card to play with it.
 add_game_regex(r'but has no action card to play with it\.')
+
+# King's Court
+# Matches: ... but plays no action with it.
+add_game_regex(r'but plays no action with it\.')
 
 # Harvest
 # Matches: ... revealing and discarding <cards> and getting +$n.
@@ -572,6 +580,35 @@ add_game_regex(r'shuffling ' + card_list_regex_piece + r' into the draw pile\.')
 # Matches: ... trashing a <card> for +$n.
 add_game_regex(r'trashing a ' + card_regex_piece + r' for \+\$(?P<money>\d+)\.', default_matcher)
 
+# Cartographer
+# Matches: ... looking at the top n cards of the deck.
+add_game_regex(r'looking at the top (?P<cards>\d+) cards? of the deck\.')
+# Matches: ... discarding n cards and putting n cards back on the deck.
+add_game_regex(r'discarding (?:(?P<discards>\d+) cards?|nothing) and putting (?:(?P<put_back>\d+) cards?|nothing) back on the deck\.')
+
+# Coppersmith
+# Matches: ... making each <span class=card-treasure>Copper</span> worth $2.
+add_game_regex(r'making each <span class=card-treasure>Copper</span> worth \$(?P<value>\d+)\.', lambda game, match, player: game.set_copper_value(int(match.group('value'))))
+
+# Contraband
+# Matches: ... <other_player> prohibits <player> from buying <card>.
+add_game_regex(r'(?P<other_player>.+) prohibits (?P<player>.+) from buying ' + card_regex_piece + r'\.', lambda game, match, player: game.prohibit(sanitize_card(match.group('card'))))
+
+# Golem
+# Matches: ... playing no other action card.
+add_game_regex(r'playing no other action card\.')
+
+# Possession
+# Matches: ... <player> discards the "trashed" cards? (<cards>).
+add_game_regex(r'(?P<player>.+) discards the "trashed" cards? \(' + card_list_regex_piece + r'\)\.', lambda game, match, player: foreach_card(match.group('cards'), lambda card: game.gain(card, player, 'trash')))
+
+# Spice Merchant
+# Matches: ... but trashes nothing.
+add_game_regex(r'but trashes nothing.')
+
+
+
+
 
 
 
@@ -594,9 +631,11 @@ assertion_abort = -1
 single_player_abort = -2
 resignation_abort = -3
 tie_abort = -4
+invalid_end_state_abort = -5
 
 # Most recent assertion that failed
 assertion_exception = None
+end_state_errors = None
 
 def abort_string(abort):
     if abort == assertion_abort:
@@ -607,60 +646,19 @@ def abort_string(abort):
         return "Player Resigned"
     elif abort == tie_abort:
         return "Tie Game"
+    elif abort == invalid_end_state_abort:
+        return "Invalid End State{0}".format(":\n{0}".format('\n'.join(end_state_errors)) if end_state_errors else "")
     else:
         return "Unknown Reason"
 
 class isotropic_parser:
 
-    # Since this is the most interesting function (it's where each line gets processed),
-    # it's at the top to make getting to it easier.
-    # It should ALWAYS return True if the line was matched, that way the caller knows to
-    # print other lines to warn that they weren't processed.
-    def read_line(self, line):
-        # Check the line to see what occurred.
-        # Please keep the common/generic type lines first, for efficiencies sake.
-        # Card specific checks should happen last, as they will only occur in games where that card is.
-        
-        # Loop through each regex we have for the game log, try it, and if it matches, call its corresponding matcher and return.
-        for regex, matcher in game_log_regexes:
-            match = regex.match(line)
-            player = None
-            # Sanity check the player (make sure that the player field doesn't eat parts that make this not really match. The .+ used to grab players is greedy.)
-            if match and 'player' in match.groupdict():
-                player = match.group('player')
-                if player is not None and player not in self.players:
-                    match = None
-            # If there's still a match, call the matcher function with the game, match, and player (which could be None)
-            if match:
-                # Check the state of revealed cards - if there were revealed cards before processing this line, they were revealed by the last line and should be reset after this line.
-                # This is because revealed cards should only affect the single line after them (its possible that the prefix could provide a better granularity to this...)
-                reset_revealed = self.game.get_revealed()
-                matcher(self.game, match, player)
-                # Reset the revealed cards
-                if reset_revealed:
-                    self.game.reset_revealed()
-                return True
-            
-        # Default return
-        return False
-        
-    # This matches a regex, and if there is a 'player' group, makes sure the player is valid.
-    # This is much easier than refreshing the regexes once the players names are found.
-    # Note that as this is not called for the outpost or possession, their use of different names for players is not taken into account
-    def regex(self, regex, line):
-        match = regex.match(line)
-        if match and 'player' in match.groupdict():
-            # Sanity check the player (make sure that the player field doesn't eat parts that make this not really match. The .+ used to grab players is greedy.)
-            player = match.group('player')
-            if player is not None and player not in self.players:
-                return None
-        return match
-    
     def __init__(self):
         self.event_handlers = {}
         self.allow_single_player_games = False
         self.allow_games_with_resign = False
         self.allow_ties = False
+        self.allow_invalid_end_state = True
         
     def register_handler(self, event, handler):
         self.event_handlers[event] = handler
@@ -691,6 +689,17 @@ class isotropic_parser:
                 self.read_scores()
             if not self.abort:
                 self.read_game()
+            if not self.abort:
+                errors = self.game.validate_final_state()
+                if errors:
+                    if not self.allow_invalid_end_state:
+                        self.abort = invalid_end_state_abort
+                        global end_state_errors
+                        end_state_errors = errors
+                    else:
+                        # If we don't break on these errors, we should at least print them out.
+                        for error in errors:
+                            print error
         except AssertionError as e:
             global assertion_exception
             assertion_exception = "{0}: {1}".format(self.line_num, e)
@@ -777,6 +786,8 @@ class isotropic_parser:
             if match:
                 deck_size = parse_count(match.group('deck_size'))
                 cards = match.group('cards')
+                # Add the final deck contents for each player (for final validation)
+                foreach_card(cards, lambda card: self.game.add_final_deck(card, player))
                 #foreach_cards(cards, lambda count, card: pr('  {0} {1} ({2})'.format(count, card, sanitize_card(card))))
             else:
                 self.unmatched_line(player_third_line, player_third_line_regex)
@@ -791,6 +802,8 @@ class isotropic_parser:
 
         # Read the contents of the trash
         trash_line = self.next() # Read the trash line
+        # Add the cards that are in the final trash pile (for validation)
+        foreach_card(trash_line, lambda card: self.game.add_final_trash(card))
         #foreach_cards(trash_line, lambda count, card: pr('  {0} {1} ({2})'.format(count, card, sanitize_card(card))))
         
         self.next() # Read the blank line after the trash
@@ -908,9 +921,9 @@ class isotropic_parser:
             # Maybe this is a possessed turn?
             match = possessed_turn_header_regex.match(turn_first_line)
             if match:
-                player = match.group('possessor')
+                possessor = match.group('possessor')
                 possessee = match.group('possessee')
-                self.game.start_new_turn(player, possessee=possessee)
+                self.game.start_new_turn(possessee, possessor=possessor)
             else:
                 match = outpost_turn_header_regex.match(turn_first_line)
                 if match:
@@ -921,6 +934,48 @@ class isotropic_parser:
                     self.unmatched_line(turn_first_line, possessed_turn_header_regex)
                     self.unmatched_line(turn_first_line, outpost_turn_header_regex)
                     
+    # It should ALWAYS return True if the line was matched, that way the caller knows to
+    # print other lines to warn that they weren't processed.
+    def read_line(self, line):
+        # Check the line to see what occurred.
+        # Please keep the common/generic type lines first, for efficiencies sake.
+        # Card specific checks should happen last, as they will only occur in games where that card is.
+        
+        # Loop through each regex we have for the game log, try it, and if it matches, call its corresponding matcher and return.
+        for regex, matcher in game_log_regexes:
+            match = regex.match(line)
+            player = None
+            # Sanity check the player (make sure that the player field doesn't eat parts that make this not really match. The .+ used to grab players is greedy.)
+            if match and 'player' in match.groupdict():
+                player = match.group('player')
+                if player is not None and player not in self.players:
+                    match = None
+            # If there's still a match, call the matcher function with the game, match, and player (which could be None)
+            if match:
+                # Check the state of revealed cards - if there were revealed cards before processing this line, they were revealed by the last line and should be reset after this line.
+                # This is because revealed cards should only affect the single line after them (its possible that the prefix could provide a better granularity to this...)
+                reset_revealed = self.game.get_revealed()
+                matcher(self.game, match, player)
+                # Reset the revealed cards
+                if reset_revealed:
+                    self.game.reset_revealed()
+                return True
+            
+        # Default return
+        return False
+        
+    # This matches a regex, and if there is a 'player' group, makes sure the player is valid.
+    # This is much easier than refreshing the regexes once the players names are found.
+    # Note that as this is not called for the outpost or possession, their use of different names for players is not taken into account
+    def regex(self, regex, line):
+        match = regex.match(line)
+        if match and 'player' in match.groupdict():
+            # Sanity check the player (make sure that the player field doesn't eat parts that make this not really match. The .+ used to grab players is greedy.)
+            player = match.group('player')
+            if player is not None and player not in self.players:
+                return None
+        return match
+    
     def unmatched_line(self, line, regex = None):
         if regex is None:
             self.handle_event(unexpected_line_event, self.line_num, line, None)

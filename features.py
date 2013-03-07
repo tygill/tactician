@@ -106,7 +106,7 @@ if __name__ == '__main__':
                 exit(0)
             elif error < 0:
                 print 'Aborting: {0}'.format(abort_string(error))
-                if error != assertion_abort:
+                if error != assertion_abort and error != invalid_end_state_abort:
                     print 'Moving {0} to {1}'.format(filename, abort_path)
                     os.rename(file, os.path.join(abort_path, filename))
                 else:
