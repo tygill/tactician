@@ -244,7 +244,7 @@ class dominion_game:
         self.other_player = None # Used to store state for Watchtower
         self.other_player_gained = None # Used to store state for Watchtower
         self.copper_value = 1 # Coppersmith
-        self.noble_brigand_gain_pending = False
+        self.noble_brigand_thief_gain_pending = False
         #self.fools_gold_value = 1 # Fool's Gold
         self.prohibited = [] # Prohibited cards (Contraband)
         self.cost_reduction = 0
@@ -443,7 +443,7 @@ class dominion_game:
         # We'll see how the logs look.
         self.money += self.treasure_card_value(card)
         # Remember when Noble Brigand is played for gain redirection from trash
-        self.noble_brigand_gain_pending = card == 'Noble Brigand'
+        self.noble_brigand_thief_gain_pending = (card == 'Noble Brigand' or card == 'Thief')
         
     def buy(self, card, player = None, source = 'supply'):
         assert_card(card)
@@ -455,10 +455,10 @@ class dominion_game:
             return
         self.gain(card, player, source)
         # Noble brigand's effect occurs on buy as well, so it might be pending after a buy too.
-        self.noble_brigand_gain_pending = card == 'Noble Brigand'
+        self.noble_brigand_thief_gain_pending = (card == 'Noble Brigand' or card == 'Thief')
     
     # Gives a card from the supply to a player
-    def gain(self, card, player = None, source = 'supply'):
+    def gain(self, card, player = None, source = 'supply', end_of_possession = False):
         assert_card(card)
         current = True # Assume the player gaining is the current controlling player (possessor in possession turns)
         if self.current_player: # If the game's started
@@ -470,18 +470,23 @@ class dominion_game:
                 self.other_player = self.get_player(player)
                 self.other_player_gained = card
                 current = False
-        if self.possessor and current:
+        # The 'current' player can't gain anything while being possessed, except at the end of their turn, when they gain back any cards that were trashed during the turn.
+        if self.possessor and current and not end_of_possession:
             return
         # Check the source of the card to be gained
         if source == 'trash':
-            # If this is a Noble Brigand, then this is indeed the trash.
+            # If this is a Noble Brigand or Thief, then this is indeed the trash.
             # However, Possession causes this to be called too (they are seemingly indistinguishable except by looking at the state)
             # So, when there is a possessing player, any gains will be automatically redirected.
-            if self.noble_brigand_gain_pending:
+            if self.noble_brigand_thief_gain_pending:
                 decr_value(self.trash_pile, card)
             else:
-                # This is the possession case.
-                decr_value(self.supply, card)
+                if not end_of_possession:
+                    # This is the possession case.
+                    decr_value(self.supply, card)
+                else:
+                    # This is a card being discarded at the end of a possession turn, so it was already trashed, and should now be moved back to the players deck who lost it.
+                    decr_value(self.trash_pile, card)
         elif source == 'prizes':
             decr_value(self.prizes, card)
         else:

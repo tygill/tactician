@@ -344,6 +344,8 @@ add_game_regex(r'gaining another ' + card_regex_piece + r'\.', lambda game, matc
 add_game_regex(r'discarding the top card of the deck\.')
 # Matches: ... leaving the top card of the deck where it is.
 add_game_regex(r'leaving the top card of the deck where it is\.')
+# Matches: ... but has nothing to trash.
+add_game_regex(r'but has nothing to trash\.')
 
 # Noble Brigand (perhaps others?)
 # Matches: ... <player> reveals and discards <cards>.
@@ -355,7 +357,7 @@ add_game_regex(r'(?P<player>.+) draws and reveals ' + card_list_regex_piece + r'
 # Matches: ... trashing the <span class=card-none>Mining Village</span> for +$2.
 def mining_village_matcher(game, match, player):
     game.trash(match.group('card'), player)
-    game.add_money(int(match.group('money')))
+    default_matcher(game, match, player)
 add_game_regex(r'trashing the ' + card_regex_piece + r' for \+\$(?P<money>\d+)\.', mining_village_matcher)
 
 # Bank (and Philosopher's Stone)
@@ -400,14 +402,13 @@ add_game_regex(r'returning ' + card_list_regex_piece + r' to the bottom of the <
 # Matches: ... <player> trashes a <card> and gets +n {vp}.
 def bishop_trash_matcher(game, match, player):
     game.trash(match.group('card'), player)
-    game.add_vp(int(match.group('vp')))
+    default_matcher(game, match, player)
 add_game_regex(r'(?P<player>.+) trashes an? ' + card_regex_piece + r' and gets \+(?P<vp>\d+) ' + get_victory_symbol() + r'\.', bishop_trash_matcher)
 
 # Salvager
 # Matches: ... trashing a <card> for +$n and +n buys.
 def salvager_trash_regex(game, match, player):
     game.trash(match.group('card'), player)
-    # Call the default matcher for money and buys
     default_matcher(game, match, player)
 add_game_regex(r'trashing an? ' + card_regex_piece + r' for \+\$(?P<money>\d+) and \+(?P<buys>\d+) buys?\.', salvager_trash_regex)
 
@@ -578,7 +579,10 @@ add_game_regex(r'shuffling ' + card_list_regex_piece + r' into the draw pile\.')
 
 # Moneylender
 # Matches: ... trashing a <card> for +$n.
-add_game_regex(r'trashing a ' + card_regex_piece + r' for \+\$(?P<money>\d+)\.', default_matcher)
+def moneylender_matcher(game, match, player):
+    game.trash(match.group('card'), player)
+    default_matcher(game, match, player)
+add_game_regex(r'trashing a ' + card_regex_piece + r' for \+\$(?P<money>\d+)\.', moneylender_matcher)
 
 # Cartographer
 # Matches: ... looking at the top n cards of the deck.
@@ -600,11 +604,19 @@ add_game_regex(r'playing no other action card\.')
 
 # Possession
 # Matches: ... <player> discards the "trashed" cards? (<cards>).
-add_game_regex(r'(?P<player>.+) discards the "trashed" cards? \(' + card_list_regex_piece + r'\)\.', lambda game, match, player: foreach_card(match.group('cards'), lambda card: game.gain(card, player, 'trash')))
+add_game_regex(r'(?P<player>.+) discards the "trashed" cards? \(' + card_list_regex_piece + r'\)\.', lambda game, match, player: foreach_card(match.group('cards'), lambda card: game.gain(card, player, 'trash', True)))
 
 # Spice Merchant
 # Matches: ... but trashes nothing.
-add_game_regex(r'but trashes nothing.')
+add_game_regex(r'but trashes nothing\.')
+
+# Cutpurse
+# Matches: ... <player> reveals <cards> (no <card>). (<card> should be Copper)
+add_game_regex(r'(?P<player>.+) reveals ' + card_list_regex_piece + r' \(no ' + card_regex_piece + r'\)\.')
+
+# Chancellor
+# Matches: ... [not] putting the deck into the discard pile.
+add_game_regex(r'(?:not )?putting the deck into the discard pile\.')
 
 
 
@@ -658,7 +670,7 @@ class isotropic_parser:
         self.allow_single_player_games = False
         self.allow_games_with_resign = False
         self.allow_ties = False
-        self.allow_invalid_end_state = True
+        self.allow_invalid_end_state = False
         
     def register_handler(self, event, handler):
         self.event_handlers[event] = handler
