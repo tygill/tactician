@@ -27,7 +27,7 @@ card_list_regex_piece = '(?P<cards>(?:(?:the )?(?:\d+|an?|the) ' + card_regex_pi
 card_list_no_count_regex_piece = '(?P<cards>(?:' + card_regex_piece_no_name + ',? ?)+(?:(?:and )?' + card_regex_piece_no_name + ')?(?:(?: and then )?' + card_regex_piece_no_name + ')?|nothing)'
 
 # Used to match the score list
-score_card_regex_piece = u'(?:<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>(?: \[\d+(?: victory| different)? cards?\])?|\u25BC)'
+score_card_regex_piece = u'(?:<[\\w=\\-"\' ]+>[\\w\\-\' ]+<[/\\w=\\-"\' ]+>(?: \[\d+(?: victory| different| action)? cards?\])?|\u25BC)'
 score_card_list_regex_piece = u'(?P<cards>(?:(?:\d+|an?|the) ' + score_card_regex_piece + u',? ?)+(?:(?:and )?(?:\d+|an?) ' + score_card_regex_piece + u')?|nothing)'
 
 # Matches the prefix to the line (the ...s)
@@ -101,9 +101,9 @@ veto_card_regex = re.compile(r'(?P<player>.+) vetoes ' + card_regex_piece + r'\.
 turn_header_regex = re.compile('\\s*&mdash; (?P<player>.+)\'s turn (?P<turn>\\d+) &mdash;')
 #  possessee: Player whose hand is being possessed
 #  possessor: Player doing the possessing
-possessed_turn_header_regex = re.compile('\\s*<img src="http://www\\.gravatar\\.com/avatar/[\w]+\\?s=40&d=identicon&r=PG" width=40 height=40 class=avatar><b>&mdash; (?P<possessee>.+)\'s turn \\(possessed by (?P<possessor>.+)\\) &mdash;</b>')
+possessed_turn_header_regex = re.compile('\\s*<img src="http://www\\.gravatar\\.com/avatar/[\w\d=&?]+" width=40 height=40 class=avatar><b>&mdash; (?P<possessee>.+)\'s turn \\(possessed by (?P<possessor>.+)\\) &mdash;</b>')
 #  player: Player who got an extra turn
-outpost_turn_header_regex = re.compile('\\s*<img src="http://www\\.gravatar\\.com/avatar/[\w]+\\?s=40&d=mm" width=40 height=40 class=avatar><b>&mdash; (?P<player>.+)\'s extra turn \\(from <span class=card-duration>Outpost</span>\\) &mdash;</b>')
+outpost_turn_header_regex = re.compile('\\s*<img src="http://www\\.gravatar\\.com/avatar/[\w\d=&?]+" width=40 height=40 class=avatar><b>&mdash; (?P<player>.+)\'s extra turn \\(from <span class=card-duration>Outpost</span>\\) &mdash;</b>')
 
 ####################
 # Game Log Regexes #
@@ -131,6 +131,20 @@ def default_matcher(game, match, player = None):
         game.reduce_cost(int(match.group('cost')))
     # Anything else is ignored.
     
+def trash_matcher(game, match, player = None):
+    if 'card' in match.groupdict():
+        game.trash(match.group('card'), player)
+    if 'cards' in match.groupdict():
+        foreach_card(match.group('cards'), lambda card: game.trash(card, player))
+    # Anything else is ignored
+    
+def gain_matcher(game, match, player = None):
+    if 'card' in match.groupdict():
+        game.gain(match.group('card'), player)
+    if 'cards' in match.groupdict():
+        foreach_card(match.group('cards'), lambda card: game.gain(card, player))
+    # Anything else is ignored
+    
 def nothing_matcher(game = None, match = None, player = None):
     pass
 
@@ -150,8 +164,10 @@ def parse_count(count):
         return None
         
 # Helper method for printing from lambda functions
-def pr(s):
+def pr(s, func = None):
     print s
+    if func:
+        func(s)
 
 # This is a utility function that makes running some action on a list of cards much simpler.
 # It accepts the string list of cards and a function taking a single card as a parameter.
@@ -189,14 +205,14 @@ add_game_regex(r'(?:and )?(?:(?P<player>.+) )?play(?:ing|s) ' + card_list_regex_
 add_game_regex(r'(?P<player>.+) buys an? ' + card_regex_piece + r'\.', lambda game, match, player: game.buy(match.group('card'), player))
 
 # Matches: ... [<player>] gain[ing|s] a <card>[ in/on (top of )? the <where>hand/deck].
-add_game_regex(r'(?:(?P<player>.+) )?gain(?:ing|s) an? ' + card_regex_piece + r'(?: [io]n (?:top of )?(?:the )?(?P<where>hand|deck)| and put(?:ting)? it on the deck)?\.', lambda game, match, player: game.gain(match.group('card'), player))
+add_game_regex(r'(?:(?P<player>.+) )?gain(?:ing|s) an? ' + card_regex_piece + r'(?: [io]n (?:top of )?(?:the )?(?P<where>hand|deck)| and put(?:ting)? it on the deck)?\.', gain_matcher)
 
 # Noble Brigand (This was moved here because it needs to be run before the following regex.)
 # Matches: ... <player> gains the <card>. (Possession also makes this show up when buying/gaining occurs. If there is a possessing player, buys and gains are ignored.)
 add_game_regex(r'(?P<player>.+) gains the ' + card_regex_piece + r'\.', lambda game, match, player: game.gain(match.group('card'), player, 'trash'))
 
 # Matches: ... <player> gain[ing|s] n <cards> [on the deck].
-add_game_regex(r'(?:(?P<player>.+) )?gain(?:ing|s) ' + card_list_regex_piece + r'(?: on the deck)?\.', lambda game, match, player: foreach_card(match.group('cards'), lambda card: game.gain(card, player)))
+add_game_regex(r'(?:(?P<player>.+) )?gain(?:ing|s) ' + card_list_regex_piece + r'(?: on the deck)?\.', gain_matcher)
 
 # Matches: ... There's nothing for <player> to gain.
 add_game_regex(r"There's nothing for (?P<player>.+) to gain\.")
@@ -205,7 +221,7 @@ add_game_regex(r"There's nothing for (?P<player>.+) to gain\.")
 add_game_regex(r'(?:(?P<player>.+) )?gain(?:ing|s) nothing\.')
 
 # Matches: ... [<player>] trash[ing|es] <cards> [from the play area|from hand]. (from play area is from Mint, from hand from Treasure Map)
-add_game_regex(r'(?:(?P<player>.+) )?trash(?:ing|es) ' + card_list_regex_piece + r'(?: from the play area| from hand)?\.', lambda game, match, player: foreach_card(match.group('cards'), lambda card: game.trash(card, player)))
+add_game_regex(r'(?:(?P<player>.+) )?trash(?:ing|es) ' + card_list_regex_piece + r'(?: from the play area| from hand)?\.', trash_matcher)
 
 # Matches: ... <player> trashes nothing.
 add_game_regex(r'(?P<player>.+) trashes nothing\.')
@@ -226,8 +242,8 @@ add_game_regex(r'\((?P<player>.+) reshuffles\.\)')
 # Matches: ... getting +$n.
 add_game_regex(r'(?:(?P<player>.+) )?get(?:ting|s) \+\$(?P<money>\d+)(?: from the <span class=card-duration>(?:Merchant Ship|Lighthouse)</span>)?\.', default_matcher)
 
-# Matches: ... getting +n action(s).
-add_game_regex(r'getting \+(?P<actions>\d+) actions?\.', default_matcher)
+# Matches: ... <player> get[ting|s] +n action(s).
+add_game_regex(r'(?:(?P<player>.+) )?get(?:ting|s) \+(?P<actions>\d+) actions?\.', default_matcher)
 
 # Matches: ... getting +n buy(s).
 add_game_regex(r'getting \+(?P<buys>\d+) buys?\.', default_matcher)
@@ -286,8 +302,8 @@ add_game_regex(r'discarding (?:(?P<cards>\d+) cards?|nothing) and getting \+\$(?
 # Matches: ... discarding (n cards?|nothing) and getting +n actions.
 add_game_regex(r'discarding (?:(?P<cards>\d+) cards?|nothing) and getting \+(?P<actions>\d+) actions?\.', default_matcher)
 
-# Matches: ... discarding <cards> and getting +$n.
-add_game_regex(r'discarding ' + card_list_regex_piece + r' and getting \+\$(?P<money>\d+)\.', default_matcher)
+# Matches: ... discarding <cards> [and getting|for] +$n.
+add_game_regex(r'discarding ' + card_list_regex_piece + r' (?:and getting|for) \+\$(?P<money>\d+)\.', default_matcher)
 
 # Matches: ... [<player>] put[ting|s] <cards> back on the deck[ (first on top)].
 add_game_regex(r'(?:(?P<player>.+) )?put(?:ting|s) ' + card_list_regex_piece + r' back on the deck(?: \((?P<order>first on top|in some order)\))?\.')
@@ -305,9 +321,9 @@ add_game_regex(r'(?P<player>.+) does nothing\.')
 def reveal_matcher(game, match, player):
     game.reset_revealed()
     if 'cards' in match.groupdict():
-        foreach_card(match.group('cards'), lambda card: game.reveal(card))
+        foreach_card(match.group('cards'), lambda card: game.reveal(card, player))
     if 'card' in match.groupdict():
-        game.reveal(match.group('card'))
+        game.reveal(match.group('card', player))
 add_game_regex(r'(?:(?P<player>.+) )?reveal(?:ing|s) ' + card_list_regex_piece + r'(?: and put(?:ting|s) (?:them|it) [io]n the hand| and keeping (?:them|it)| and discarding (?:them|it))?\.', reveal_matcher)
 
 # Used by Loan
@@ -319,9 +335,11 @@ add_game_regex(r'drawing and revealing ' + card_list_regex_piece + r'\.', reveal
 
 # Swindler
 # Matches: ... <player> turns up a <card> and trashes is.
-add_game_regex(r'(?P<player>.+) turns up an? ' + card_regex_piece + r' and trashes it\.', lambda game, match, player: game.trash(match.group('card'), player))
+add_game_regex(r'(?P<player>.+) turns up an? ' + card_regex_piece + r' and trashes it\.', trash_matcher)
 # Matches: ... replacing <player>'s <old_card> with a <new_card>.
 add_game_regex(r"replacing (?P<player>.+)'s " + card_regex_piece_formatable.format('old_card') + r' with an? ' + card_regex_piece_formatable.format('new_card') + r'\.', lambda game, match, player: game.gain(match.group('new_card'), player))
+# Matches: ... No replacement is available.
+add_game_regex(r'No replacement is available\.')
 
 # Fortune Teller - others?
 # Matches: <player> puts the <card> back onto the deck.
@@ -333,11 +351,11 @@ add_game_regex(r'putting the ' + card_regex_piece + r' into the hand\.')
 
 # Apothecary
 # Matches: ... putting <cards> into the hand.
-add_game_regex(r'putting the ' + card_list_regex_piece + r' into the hand\.')
+add_game_regex(r'putting (?:the )?' + card_list_regex_piece + r' into the hand\.')
 
 # Talisman
 # Matches: ... gaining another <card>.
-add_game_regex(r'gaining another ' + card_regex_piece + r'\.', lambda game, match, player: game.gain(match.group('card'), player))
+add_game_regex(r'gaining another ' + card_regex_piece + r'\.', gain_matcher)
 
 # Jack of All Trades (and perhaps others? Sea Hag maybe?)
 # Matches: ... discarding the top card of the deck.
@@ -378,7 +396,7 @@ add_game_regex(r'(?P<player>.+) discards an? ' + card_regex_piece_formatable.for
 
 # Bag of Gold
 # Matches: ... gaining a <card> on the deck.
-add_game_regex(r'gaining a ' + card_regex_piece + r' on the deck\.', lambda game, match, player: game.gain(match.group('card'), player))
+add_game_regex(r'gaining a ' + card_regex_piece + r' on the deck\.', gain_matcher)
 
 # Only has 3 (n) cards (Goons, Militia, Ghost Ship, etc.)
 # Matches: ... <player> only has n cards.
@@ -478,13 +496,17 @@ add_game_regex(r'setting aside the <span class=card-victory-action>Island</span>
 
 # Mint
 # Matches: ... revealing a <card> and gaining another one.
-add_game_regex(r'revealing a ' + card_regex_piece + r' and gaining another one\.', lambda game, match, player: game.gain(match.group('card'), player))
+add_game_regex(r'revealing a ' + card_regex_piece + r' and gaining another one\.', gain_matcher)
+# Matches: ... but reveals no treasure card.
+add_game_regex(r'but reveals no treasure card\.')
 
 # Pearl Diver
 # Matches: ... but leaving the bottom card of the deck where it is.
 add_game_regex(r'but leaving the bottom card of the deck where it is\.')
 # Matches: ... and moving the bottom card of the deck to the top.
 add_game_regex(r'and moving the bottom card of the deck to the top\.')
+# Matches: ... but has no cards to look at.
+add_game_regex(r'but has no cards to look at\.')
 
 # Thief
 # Matches: ... <other_player> trashes one of <player>'s <card>.
@@ -505,13 +527,13 @@ add_game_regex(r'(?P<player>.+) reveals a Bane card \(an? ' + card_regex_piece +
 
 # Tactician
 # Matches: ... discarding the hand (n cards).
-add_game_regex(r'discarding the hand \((?P<cards>\d+) cards\)\.')
+add_game_regex(r'discarding the hand \((?P<cards>\d+) cards?\)\.')
 # Matches: ... but has no cards to discard.
 add_game_regex(r'but has no cards to discard\.')
 
 # Tunnel
-# Matches: ... revealing a <reveal> and gaining a <gain>.
-add_game_regex(r'revealing a ' + card_regex_piece_formatable.format('reveal') + r' and gaining a ' + card_regex_piece_formatable.format('gain') + r'\.', lambda game, match, player: game.gain(match.group('gain'), player))
+# Matches: ... <player> reveal[ing|s] a <reveal> and gain[ing|s] a <gain>.
+add_game_regex(r'(?:(?P<player>.+) )?reveal(?:ing|s) a ' + card_regex_piece_formatable.format('reveal') + r' and gain(?:ing|s) a ' + card_regex_piece_formatable.format('gain') + r'\.', lambda game, match, player: game.gain(match.group('gain'), player))
 
 # Ambassador
 # Matches: ... returning n copies to the supply.
@@ -538,7 +560,9 @@ add_game_regex(r'(?P<player>.+) restores the ' + card_regex_piece + r' to the ha
 # Matches: ... <player> draws and reveals <cards>.
 add_game_regex(r'(?P<player>.+) draws and reveals ' + card_list_regex_piece + r'\.')
 # Matches: ... [<other_player> makes] <player> [puts them back on the deck/discards them].
-add_game_regex(r'(?:(?P<other_player>.+) makes )?(?P<player>.+) (?:puts them back on the deck|discards? them)\.')
+add_game_regex(r'(?:(?P<other_player>.+) makes )?(?P<player>.+) (?:puts? them back on the deck|discards? them)\.')
+# Matches: ... <player> discards it.
+add_game_regex(r'(?P<player>.+) discards it\.')
 
 # Throne Room
 # Matches: ... but has no action card to play with it.
@@ -583,6 +607,8 @@ def moneylender_matcher(game, match, player):
     game.trash(match.group('card'), player)
     default_matcher(game, match, player)
 add_game_regex(r'trashing a ' + card_regex_piece + r' for \+\$(?P<money>\d+)\.', moneylender_matcher)
+# Matches: ... but has no <span class=card-treasure>Copper</span> to trash.
+add_game_regex(r'but has no <span class=card-treasure>Copper</span> to trash\.')
 
 # Cartographer
 # Matches: ... looking at the top n cards of the deck.
@@ -618,8 +644,53 @@ add_game_regex(r'(?P<player>.+) reveals ' + card_list_regex_piece + r' \(no ' + 
 # Matches: ... [not] putting the deck into the discard pile.
 add_game_regex(r'(?:not )?putting the deck into the discard pile\.')
 
+# Remake
+# Matches: ... <player> has no card to trash.
+add_game_regex(r'(?P<player>.+) has no card to trash\.')
 
+# Wishing Well
+# Matches: ... wishing for a <card> [and finding one|but finding a <found> instead].
+add_game_regex(r'wishing for an? ' + card_regex_piece + r' (?:and finding one|but finding an? ' + card_regex_piece_formatable.format('found') + r' instead)\.')
 
+# Saboteur
+# Matches: ... <player> reveals a <card> and trashes it.
+add_game_regex(r'(?P<player>.+) reveals an? ' + card_regex_piece + r' and trashes it\.', trash_matcher)
+# Matches: ... The <card> is trashed. (This has to use some reveal state to know which players card should be trashed.
+add_game_regex(r'The ' + card_regex_piece + r' is trashed\.', lambda game, match, player: game.trash(match.group('card'), game.get_last_reveal_player()))
+# Matches: ... <player> gains a <card> to replace it.
+add_game_regex(r'(?P<player>.+) gains an? ' + card_regex_piece + r' to replace it\.', gain_matcher)
+# Matches: ... <player> gains nothing to replace it.
+add_game_regex(r'(?P<player>.+) gains nothing to replace it\.')
+
+# Pirate Ship
+# Matches: ... attacking the other players.
+add_game_regex(r'attacking the other players\.')
+# Matches: ... <other_player> trashes <player>'s <card>.
+add_game_regex(r"(?P<other_player>.+) trashes (?P<player>.+)'s " + card_regex_piece + r'\.', trash_matcher)
+# Matches: ... <player> gains a <span class=card-none>Pirate Ship</span> token.
+add_game_regex(r'(?P<player>.+) gains a <span class=card-none>Pirate Ship</span> token\.', lambda game, match, player: game.add_pirate_ship_token(1, player))
+
+# Minion
+# Matches: ... <player> discard[ing|s] the hand.
+add_game_regex(r'(?:(?P<player>.+) )?discard(?:ing|s) the hand\.')
+# Matches: ... <player> has n cards in hand.
+add_game_regex(r'(?P<player>.+) has (?P<cards>\d+) cards in hand\.')
+
+# Counting House
+# Matches: ... putting <cards> from the discard pile into the hand.
+add_game_regex(r'putting ' + card_list_regex_piece + r' from the discard pile into the hand\.')
+
+# Library
+# Matches: ... setting aside a <card>.
+add_game_regex(r'setting aside an? ' + card_regex_piece + r'\.')
+
+# Torturer
+# Matches: ... <player> gains nothing in hand.
+add_game_regex(r'(?P<player>.+) gains nothing in hand\.')
+
+# Secret Chamber
+# Matches: ... returning n cards to the deck.
+add_game_regex(r'returning (?P<cards>\d+) cards? to the deck\.')
 
 
 

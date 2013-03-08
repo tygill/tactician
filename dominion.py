@@ -55,7 +55,9 @@ def decr_value(map, val):
     if val in map:
         map[val] -= 1
     else:
-        assert False, 'Decrementing card pile that doesn\'t exist: {0}'.format(val)
+        # Should thi assert be ignored? Masquerade can cause unknown things to happen in the state.
+        pass
+        #assert False, 'Decrementing card pile that doesn\'t exist: {0}'.format(val)
     
 def move_card(a, b, card):
     decr_value(a, card)
@@ -107,6 +109,8 @@ class dominion_player:
         #self.out_of_play = {}
         ##self.cards_in_hand = 0
         self.vp = 0
+        self.pirate_ship_tokens = 0
+        
         self.output_weight = None
         self.action_card_ratio = 0
         self.victory_card_ratio = 0
@@ -213,6 +217,9 @@ class dominion_player:
         
     def add_vp(self, vp):
         self.vp += vp
+        
+    def add_pirate_ship_token(self, tokens):
+        self.pirate_ship_tokens += tokens
     
 # This class stores information about the state of a game of dominion
 class dominion_game:
@@ -231,6 +238,7 @@ class dominion_game:
         self.empty_piles = []
         self.winner = None
         self.game_id = None
+        self.masquerade_used = False
         
         # Turn context
         self.current_player = None
@@ -241,14 +249,15 @@ class dominion_game:
         self.buys = 1
         self.cards_gained = []
         self.cards_bought = []
-        self.other_player = None # Used to store state for Watchtower
-        self.other_player_gained = None # Used to store state for Watchtower
+        self.last_player_to_gain = None # Used to store state for Watchtower
+        self.last_card_gained = None # Used to store state for Watchtower
         self.copper_value = 1 # Coppersmith
         self.noble_brigand_thief_gain_pending = False
         #self.fools_gold_value = 1 # Fool's Gold
         self.prohibited = [] # Prohibited cards (Contraband)
         self.cost_reduction = 0
         self.revealed = []
+        self.last_reveal_player = None # Used by Saboteur
         
     # Game Initialization functions
     # -----------------------------
@@ -337,25 +346,28 @@ class dominion_game:
         self.embargoes = {}
         
     def validate_final_state(self):
-        ret = []
-        # Validate that the empty piles are empty
-        # Note that this can't check the non-empty piles.
-        for card in self.empty_piles:
-            if self.supply[card] != 0:
-                ret.append('Mismatch: {0} supply pile should be empty - has {1} left'.format(card, self.supply[card]))
-        # Validate the trash
-        errors = compare_decks(self.final_trash, self.trash_pile)
-        if errors:
-            ret.append('Mismatch in trash pile')
-            for error in errors:
-                ret.append(' {0}'.format(error))
-        # Validate each players final deck
-        for (name, player) in self.players.iteritems():
-            errors = player.check_deck()
-            for error in errors:
-                ret.append(error)
-        return ret
-                
+        # Masquerade does strange, unknowable things to the game's state. Just assume that 
+        if not self.masquerade_used:
+            ret = []
+            # Validate that the empty piles are empty
+            # Note that this can't check the non-empty piles.
+            for card in self.empty_piles:
+                if self.supply[card] != 0:
+                    ret.append('Mismatch: {0} supply pile should be empty - has {1} left'.format(card, self.supply[card]))
+            # Validate the trash
+            errors = compare_decks(self.final_trash, self.trash_pile)
+            if errors:
+                ret.append('Mismatch in trash pile')
+                for error in errors:
+                    ret.append(' {0}'.format(error))
+            # Validate each players final deck
+            for (name, player) in self.players.iteritems():
+                errors = player.check_deck()
+                for error in errors:
+                    ret.append(error)
+            return ret
+        else:
+            return None
                 
     # Game state manipulation functions
     # ---------------------------------
@@ -380,8 +392,8 @@ class dominion_game:
         
         del self.cards_gained[:]
         del self.cards_bought[:]
-        self.other_player = None
-        self.other_player_gained = None
+        self.last_player_to_gain = None
+        self.last_card_gained = None
         
         self.copper_value = 1 # Coppersmith
         #self.fools_gold_value = 1 # Fool's Gold (must be updated when a treasure card is 'played')
@@ -460,15 +472,20 @@ class dominion_game:
     # Gives a card from the supply to a player
     def gain(self, card, player = None, source = 'supply', end_of_possession = False):
         assert_card(card)
+        # If someone gets a Masquerade, then remember it, as it means we can't validate the final game state.
+        if card == 'Masquerade':
+            self.masquerade_used = True
         current = True # Assume the player gaining is the current controlling player (possessor in possession turns)
         if self.current_player: # If the game's started
             if self.get_player() is self.get_player(player):
                 self.cards_gained.append(card)
+                self.last_player_to_gain = player # Remember the current player as the other player
+                self.last_card_gained = card
             else:
                 # Another player gained a card.
                 # Store the most recent gained card here for Watchtower (to trash it)
-                self.other_player = self.get_player(player)
-                self.other_player_gained = card
+                self.last_player_to_gain = self.get_player(player)
+                self.last_card_gained = card
                 current = False
         # The 'current' player can't gain anything while being possessed, except at the end of their turn, when they gain back any cards that were trashed during the turn.
         if self.possessor and current and not end_of_possession:
@@ -502,9 +519,9 @@ class dominion_game:
         # If a watchtower was revealed just before this,
         if player is None and len(self.revealed) == 1 and self.revealed[0] == 'Watchtower':
             # The card being trashed should match the card that was being gained before
-            assert self.other_player_gained == card, "Redirecting trashing a {0} to player '{1}' after Watchtower: Expected {2}".format(card, self.other_player, self.other_player_gained)
+            assert self.last_card_gained == card, "Redirecting trashing a {0} to player '{1}' after Watchtower: Expected {2}".format(card, self.last_player_to_gain, self.last_card_gained)
             # Then this card should be trashed by another player
-            player = self.other_player
+            player = self.last_player_to_gain
         incr_value(self.trash_pile, card)
         # Cards trashed by possession are returned to the players deck at the end of their turn
         self.get_player(player).trash(card)
@@ -512,11 +529,15 @@ class dominion_game:
     def add_vp(self, vp = 1, player = None):
         self.get_player(player).add_vp(vp)
         
+    def add_pirate_ship_token(self, tokens = 1, player = None):
+        self.get_player(player).add_pirate_ship_token(tokens)
+        
     def embargo(self, card):
         incr_value(self.embargoes, card)
         
     def reset_revealed(self):
         self.revealed = []
+        self.last_reveal_player = None
         
     # Used by Ambassador to return a card from a player's deck to the supply
     def return_to_supply(self, card, player = None):
@@ -524,9 +545,10 @@ class dominion_game:
         self.get_player(player).trash(card)
         incr_value(self.supply, card)
         
-    def reveal(self, card):
+    def reveal(self, card, player):
         assert_card(card)
         self.revealed.append(card)
+        self.last_reveal_player = player
                 
     # Utility methods
     # ---------------
@@ -545,6 +567,9 @@ class dominion_game:
             
     def get_num_players(self):
         return self.num_players
+        
+    def get_last_reveal_player(self):
+        return self.last_reveal_player
         
     def get_cards_bought(self):
         return self.cards_bought
