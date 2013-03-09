@@ -59,7 +59,7 @@ player_first_line_regex = re.compile(r'<b>#(?P<place>\d) (?P<player>.+)</b>: (?:
 player_second_line_regex = re.compile(r'\s*opening: (?P<card_one>.+) / (?P<card_two>.+)')
 #  deck_size: Number of cards in deck (total)
 #  cards: List of cards and counts in deck
-player_third_line_regex = re.compile(r'\s*\[(?P<deck_size>\d+) cards?\] ' + card_list_regex_piece)
+player_third_line_regex = re.compile(r'\s*\[(?P<deck_size>\d+) cards?\](?: ' + card_list_regex_piece + ')?')
 
 # Game log
 
@@ -436,8 +436,8 @@ def bishop_trash_matcher(game, match, player):
     game.trash(match.group('card'), player)
     default_matcher(game, match, player)
 add_game_regex(r'(?P<player>.+) trashes an? ' + card_regex_piece + r' and gets \+(?P<vp>\d+) ' + get_victory_symbol() + r'\.', bishop_trash_matcher)
-# Matches: ... <player> has no cards to trash.
-add_game_regex(r'(?P<player>.+) has no cards to trash\.')
+# Matches: ... <player> has no cards to trash/in hand.
+add_game_regex(r'(?P<player>.+) has no cards (?:to trash|in hand)\.')
 
 # Salvager
 # Matches: ... trashing a <card> for +$n and +n buys.
@@ -514,6 +514,8 @@ add_game_regex(r'<span class=card-duration>Lighthouse</span> provides (?P<player
 # Island
 # Matches: ... setting aside the <span class=card-victory-action>Island</span> with an? <card>.
 add_game_regex(r'setting aside the <span class=card-victory-action>Island</span> (?:with an? ' + card_regex_piece + r'|\(no other cards in hand\))\.')
+# Matches: ... setting aside nothing.
+add_game_regex(r'setting aside nothing\.')
 
 # Mint
 # Matches: ... revealing a <card> and gaining another one.
@@ -570,6 +572,8 @@ def ambassador_matcher(game, match, player):
 add_game_regex(r'returning (?P<copies>\d+) copies to the supply\.', ambassador_matcher)
 # Matches: ... returning it to the supply.
 add_game_regex(r'returning it to the supply\.', ambassador_matcher)
+# Matches: ... but has no card to reveal.
+add_game_regex(r'but has no card to reveal\.')
 
 # Horse Traders
 # Matches: ... setting it aside.
@@ -581,9 +585,7 @@ add_game_regex(r'(?P<player>.+) restores the ' + card_regex_piece + r' to the ha
 # Matches: ... <player> draws and reveals <cards>.
 add_game_regex(r'(?P<player>.+) draws and reveals ' + card_list_regex_piece + r'\.')
 # Matches: ... [<other_player> makes] <player> [puts them back on the deck/discards them].
-add_game_regex(r'(?:(?P<other_player>.+) makes )?(?P<player>.+) (?:puts? them back on the deck|discards? them)\.')
-# Matches: ... [<other_player> makes] <player> discards it.
-add_game_regex(r'(?:(?P<other_player>.+) makes )?(?P<player>.+) discards? it\.')
+add_game_regex(r'(?:(?P<other_player>.+) makes )?(?P<player>.+) (?:puts? (?:them|it) back on the deck|discards? (?:them|it))\.')
 
 # Throne Room
 # Matches: ... but has no action card to play with it.
@@ -639,7 +641,7 @@ add_game_regex(r'but has no <span class=card-treasure>Copper</span> to trash\.')
 
 # Cartographer
 # Matches: ... looking at the top n cards of the deck.
-add_game_regex(r'looking at the top (?P<cards>\d+) cards? of the deck\.')
+add_game_regex(r'looking at the top (?:(?P<cards>\d+) cards?|nothing) of the deck\.')
 # Matches: ... discarding n cards and putting n cards back on the deck.
 add_game_regex(r'discarding (?:(?P<discards>\d+) cards?|nothing) and putting (?:(?P<put_back>\d+) cards?|nothing) back on the deck\.')
 
@@ -688,6 +690,8 @@ add_game_regex(r'(?P<player>.+) reveals an? ' + card_regex_piece + r' and trashe
 add_game_regex(r'The ' + card_regex_piece + r' is trashed\.', lambda game, match, player: game.trash(match.group('card'), game.get_last_reveal_player()))
 # Matches: ... <player> gains a <card> to replace it.
 add_game_regex(r'(?P<player>.+) gains (?:an? ' + card_regex_piece + r'|nothing) to replace it\.', gain_matcher)
+# Matches: ... <player> reveals <cards> but has no card to sabotage.
+add_game_regex(r'(?P<player>.+) reveals ' + card_list_regex_piece + r' but has no card to sabotage\.')
 
 # Pirate Ship
 # Matches: ... attacking the other players.
@@ -744,6 +748,30 @@ add_game_regex(r'but has nothing to expand\.')
 # Mine
 # Matches: ... but has no treasure card to trash.
 add_game_regex(r'but has no treasure card to trash\.')
+
+# Remodel
+# Matches: ... but has nothing to remodel.
+add_game_regex(r'but has nothing to remodel\.')
+
+# Border Village
+# Matches: ... gaining nothing with it.
+add_game_regex(r'gaining nothing with it\.')
+
+# Transmute
+# Matches: ... having no cards to trash.
+add_game_regex(r'having no cards to trash\.')
+
+# Spy
+# Matches: ... <player> has no card to reveal.
+add_game_regex(r'(?P<player>.+) has no card to reveal\.')
+
+# Ill-Gotten Gains
+# Matches: ... gaining nothing in the hand.
+add_game_regex(r'gaining nothing in the hand\.')
+
+# Fool's Gold
+# Matches: ... revealing a <card> but gaining nothing.
+add_game_regex(r'revealing a ' + card_regex_piece + r' but gaining nothing\.')
 
 
 
@@ -922,9 +950,10 @@ class isotropic_parser:
             if match:
                 deck_size = parse_count(match.group('deck_size'))
                 cards = match.group('cards')
-                # Add the final deck contents for each player (for final validation)
-                foreach_card(cards, lambda card: self.game.add_final_deck(card, player))
-                #foreach_cards(cards, lambda count, card: pr('  {0} {1} ({2})'.format(count, card, sanitize_card(card))))
+                if cards:
+                    # Add the final deck contents for each player (for final validation)
+                    foreach_card(cards, lambda card: self.game.add_final_deck(card, player))
+                    #foreach_cards(cards, lambda count, card: pr('  {0} {1} ({2})'.format(count, card, sanitize_card(card))))
             else:
                 self.unmatched_line(player_third_line, player_third_line_regex)
                     

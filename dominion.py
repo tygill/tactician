@@ -163,9 +163,9 @@ class dominion_player:
             if is_treasure(card):
                 treasures += cards
             total += cards
-        self.action_card_ratio = actions / total
-        self.victory_card_ratio = victories / total
-        self.treasure_card_ratio = treasures / total
+        self.action_card_ratio = actions / total if total > 0 else 0
+        self.victory_card_ratio = victories / total if total > 0 else 0
+        self.treasure_card_ratio = treasures / total if total > 0 else 0
         
     # Game State Modifiers
     
@@ -291,7 +291,7 @@ class dominion_game:
             for p in self.players.values():
                 total += p.get_final_score()
             average = total / self.num_players
-            weight = (player.get_final_score() - average) / average
+            weight = (player.get_final_score() - average) / (average if average != 0 else 1)
             player.set_output_weight(weight)
             return weight
             

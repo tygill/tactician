@@ -91,6 +91,7 @@ if __name__ == '__main__':
     parser.register_handler(parse_complete_event, features.parse_complete_handler)
     
     log_path = 'games'
+    subdir_path = '{0:04}/{1:02}/{2:02}'
     abort_path = 'ignored'
     if not os.path.exists(abort_path):
         os.makedirs(abort_path)
@@ -103,14 +104,28 @@ if __name__ == '__main__':
             error = parser.read(file)
             if error > 0:
                 print '{0} unhandled lines in file: {1}'.format(error, file)
-                exit(0)
+                # Move unmatched files to the root so they get found quicker in the future
+                os.rename(file, os.path.join(log_path, filename))
+                #exit(0)
             elif error < 0:
                 print 'Aborting: {0}'.format(abort_string(error))
                 if error != assertion_abort and error != invalid_end_state_abort:
                     print 'Moving {0} to {1}'.format(filename, abort_path)
                     os.rename(file, os.path.join(abort_path, filename))
                 else:
-                    exit(0)
+                    # Move unmatched files to the root so they get found quicker in the future
+                    os.rename(file, os.path.join(log_path, filename))
+                    #exit(0)
+                    pass
+            else:
+                match = re.match(r'game-(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})-\d{6}-[\d\w]{8}\.html', filename)
+                if match:
+                    year = int(match.group('year'))
+                    month = int(match.group('month'))
+                    day = int(match.group('day'))
+                    full_file = os.path.join(log_path, subdir_path.format(year, month, day), filename)
+                    if full_file != file:
+                        os.rename(file, full_file)
     
     features.close()
     print 'Finished building features.'
