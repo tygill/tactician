@@ -56,8 +56,8 @@ def decr_value(map, val):
         map[val] -= 1
     else:
         # Should thi assert be ignored? Masquerade can cause unknown things to happen in the state.
-        pass
         #assert False, 'Decrementing card pile that doesn\'t exist: {0}'.format(val)
+        pass
     
 def move_card(a, b, card):
     decr_value(a, card)
@@ -88,7 +88,7 @@ def compare_decks(expected, actual):
                 ret.append('{0}: Expected {1} Found {2}'.format(card, count, actual[card]))
     # Look for cards that are there that shouldn't be
     for (card, count) in actual.iteritems():
-        if card not in expected and count > 0:
+        if card not in expected and count != 0:
             ret.append('{0}: Unexpected {1}'.format(card, count))
     return ret
     
@@ -476,6 +476,9 @@ class dominion_game:
         if card == 'Masquerade':
             self.masquerade_used = True
         current = True # Assume the player gaining is the current controlling player (possessor in possession turns)
+        # If there was a border village played, the player that gained the border village should gain the new card.
+        if self.last_card_gained == 'Border Village':
+            player = self.last_player_to_gain
         if self.current_player: # If the game's started
             if self.get_player() is self.get_player(player):
                 self.cards_gained.append(card)
@@ -519,7 +522,8 @@ class dominion_game:
         # If a watchtower was revealed just before this,
         if player is None and len(self.revealed) == 1 and self.revealed[0] == 'Watchtower':
             # The card being trashed should match the card that was being gained before
-            assert self.last_card_gained == card, "Redirecting trashing a {0} to player '{1}' after Watchtower: Expected {2}".format(card, self.last_player_to_gain, self.last_card_gained)
+            # This assert is skipped because if multiple cards are gained at once and both are watchtowered (e.g., Copper and Curse from Montebank), this would fail.
+            #assert self.last_card_gained == card, "Redirecting trashing a {0} to player '{1}' after Watchtower: Expected {2}".format(card, self.get_player(self.last_player_to_gain).name, self.last_card_gained)
             # Then this card should be trashed by another player
             player = self.last_player_to_gain
         incr_value(self.trash_pile, card)
