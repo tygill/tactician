@@ -97,9 +97,9 @@ if __name__ == '__main__':
     cur_date = end_date + time_delta
     while start_date <= cur_date:
         url = cur_date.strftime('http://dominion.isotropic.org/gamelog/%Y%m/%d/all.tar.bz2')
-        filename = cur_date.strftime('{0}/%Y-%m-%d.tar.bz2'.format(download_dir))
+        filename = cur_date.strftime('{0}\%Y-%m-%d.tar.bz2'.format(download_dir))
         filename_download = filename + '.tmp'
-        finished_name = cur_date.strftime('{0}/%Y-%m-%d.tar.bz2'.format(extracted_dir))
+        finished_name = cur_date.strftime('{0}\%Y-%m-%d.tar.bz2'.format(extracted_dir))
         # Skip downloading files that have already been downloaded
         if not os.path.exists(filename) and not os.path.exists(finished_name):
             if download:

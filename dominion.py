@@ -544,8 +544,12 @@ class dominion_game:
         self.last_reveal_player = None
         
     # Used by Ambassador to return a card from a player's deck to the supply
-    def return_to_supply(self, card, player = None):
+    def return_to_supply(self, card, player = None, trader = False):
         assert_card(card)
+        # If this is a trader, and there was no line showing that the card being returned was actually gained just before this, then don't return it.
+        # Trader has this problem when combined with Ill-Gotten Gains' free Copper.
+        if self.last_card_gained != card and trader:
+            return
         self.get_player(player).trash(card)
         incr_value(self.supply, card)
         

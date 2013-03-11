@@ -2,6 +2,10 @@ from dominion import *
 from isotropic import *
 import sys
 import os
+from optparse import OptionParser
+
+def pr(s):
+    print s.encode('utf-8')
 
 # This class handles logging features to be trained on
 class feature_extractor:
@@ -9,6 +13,7 @@ class feature_extractor:
     def __init__(self, filename):
         self.file = open(filename, 'w')
         self.features = []
+        self.pending_instances = []
         self.files = 0
         self.instances = 0
         
@@ -62,25 +67,78 @@ class feature_extractor:
         
     def write_instance(self, game, output):
         # Extract the information from the current game state and log it
-        for feature in self.features:
-            self.file.write(str(feature(game)) + ',')
-        # Write the output (its not a traditional feature!)
-        self.file.write('{0},{1}\n'.format(output, game.calc_output_weight()))
-        self.instances += 1
+        instance = ','.join([str(feature(game)) for feature in self.features]) + '{0},{1}\n'.format(output, game.calc_output_weight())
+        self.pending_instances.append(instance)
+        #for feature in self.features:
+        #    self.file.write(str(feature(game)) + ',')
+        ## Write the output (its not a traditional feature!)
+        #self.file.write('{0},{1}\n'.format(output, game.calc_output_weight()))
+        #self.instances += 1
         
     def unhandled_line_handler(self, game, line_num, line):
-        print '{0}: Unhandled line: {1}'.format(line_num, line.encode('utf-8'))
+        pr('{0}: Unhandled line: {1}'.format(line_num, line))
         
     def unexpected_line_handler(self, game, line_num, line, regex = None):
         print
         if regex:
-            print '{0}: Unexpected line: {1} (Expected: {2})'.format(line_num, line.encode('utf-8'), regex.encode('utf-8'))
+            pr('{0}: Unexpected line: {1} (Expected: {2})'.format(line_num, line, regex))
         else:
-            print '{0}: Unexpected line: {1}'.format(line_num, line.encode('utf-8'))
+            pr('{0}: Unexpected line: {1}'.format(line_num, line))
+            
+    def parse_started_handler(self, game):
+        pass
             
     def parse_complete_handler(self, game):
         self.files += 1
+        for instance in self.pending_instances:
+            self.file.write(instance)
+            self.file.write('\n')
+            self.instances += 1
+        del self.pending_instances[:]
         
+    def parse_aborted_handler(self, game, line_num, error):
+        del self.pending_instances[:]
+        
+log_path = 'games'
+subdir_path = os.path.join('{0:04}', '{1:02}', '{2:02}')
+ignore_path = os.path.join(log_path, 'ignored')
+error_path = os.path.join(log_path, 'error')
+unhandled_path = os.path.join(log_path, 'unhandled')
+if not os.path.exists(ignore_path):
+    os.makedirs(ignore_path)
+if not os.path.exists(error_path):
+    os.makedirs(error_path)
+if not os.path.exists(unhandled_path):
+    os.makedirs(unhandled_path)
+    
+def rename(filename, src, dest):
+    old = os.path.join(src, filename)
+    new = os.path.join(dest, filename)
+    if old != new:
+        print 'Moving {0} from\n {1} to\n {2}'.format(filename, src, dest)
+        os.rename(old, new)
+    
+def process_file(dirname, filename):
+    file = os.path.join(dirname, filename)
+    print 'Parsing: {0}'.format(file)
+    error = parser.read(file)
+    if error > 0:
+        print '{0} unhandled lines in file: {1}'.format(error, file)
+        rename(filename, dirname, unhandled_path)
+    elif error < 0:
+        print 'Aborting: {0}'.format(abort_string(error))
+        if error == assertion_abort or error == invalid_end_state_abort:
+            rename(filename, dirname, error_path)
+        else:
+            rename(filename, dirname, ignore_path)
+    else:
+        match = re.match(r'game-(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})-\d{6}-[\d\w]{8}\.html', filename)
+        if match:
+            year = int(match.group('year'))
+            month = int(match.group('month'))
+            day = int(match.group('day'))
+            rename(filename, dirname, os.path.join(log_path, subdir_path.format(year, month, day)))
+    
 if __name__ == '__main__':
     parser = isotropic_parser()
     features = feature_extractor('features.txt')
@@ -88,44 +146,50 @@ if __name__ == '__main__':
     parser.register_handler(turn_complete_event, features.turn_complete_handler)
     parser.register_handler(unhandled_line_event, features.unhandled_line_handler)
     parser.register_handler(unexpected_line_event, features.unexpected_line_handler)
+    parser.register_handler(parse_started_event, features.parse_started_handler)
     parser.register_handler(parse_complete_event, features.parse_complete_handler)
+    parser.register_handler(parse_aborted_event, features.parse_aborted_handler)
     
-    log_path = 'games'
-    subdir_path = '{0:04}/{1:02}/{2:02}'
-    abort_path = 'ignored'
-    if not os.path.exists(abort_path):
-        os.makedirs(abort_path)
+    process_ignored = '-i' in sys.argv
+    process_unhandled = '-u' in sys.argv
+    process_errors = '-e' in sys.argv
+    if '-h' in sys.argv:
+        print 'Command line args:'
+        print ' -i: Reprocess ignored directory'
+        print ' -u: Reprocess unhandled directory'
+        print ' -e: Reprocess error directory'
+        exit(0)
+    
+    # Process ignored files
+    if process_ignored:
+        for filename in os.listdir(ignore_path):
+            if os.path.isfile(os.path.join(ignore_path, filename)):
+                process_file(ignore_path, filename)
+    
+    # Process errored files
+    if process_errors:
+        for filename in os.listdir(error_path):
+            if os.path.isfile(os.path.join(error_path, filename)):
+                process_file(error_path, filename)
+    
+    # Process unhandled files
+    if process_unhandled:
+        for filename in os.listdir(unhandled_path):
+            if os.path.isfile(os.path.join(unhandled_path, filename)):
+                process_file(unhandled_path, filename)
+    
     # Iterate over all files in the log path
     # http://stackoverflow.com/questions/120656/directory-listing-in-python
     for dirname, dirnames, filenames in os.walk(log_path):
         for filename in filenames:
-            file = os.path.join(dirname, filename)
-            print 'Parsing: {0}'.format(file)
-            error = parser.read(file)
-            if error > 0:
-                print '{0} unhandled lines in file: {1}'.format(error, file)
-                # Move unmatched files to the root so they get found quicker in the future
-                os.rename(file, os.path.join(log_path, filename))
-                #exit(0)
-            elif error < 0:
-                print 'Aborting: {0}'.format(abort_string(error))
-                if error != assertion_abort and error != invalid_end_state_abort:
-                    print 'Moving {0} to {1}'.format(filename, abort_path)
-                    os.rename(file, os.path.join(abort_path, filename))
-                else:
-                    # Move unmatched files to the root so they get found quicker in the future
-                    os.rename(file, os.path.join(log_path, filename))
-                    #exit(0)
-                    pass
-            else:
-                match = re.match(r'game-(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})-\d{6}-[\d\w]{8}\.html', filename)
-                if match:
-                    year = int(match.group('year'))
-                    month = int(match.group('month'))
-                    day = int(match.group('day'))
-                    full_file = os.path.join(log_path, subdir_path.format(year, month, day), filename)
-                    if full_file != file:
-                        os.rename(file, full_file)
+            process_file(dirname, filename)
+        # Don't walk over the other paths, as they are iterated separately.
+        if ignore_path in dirnames:
+            dirnames.remove(ignore_path)
+        if error_path in dirnames:
+            dirnames.remove(error_path)
+        if unhandled_path in dirnames:
+            dirnames.remove(unhandled_path)
     
     features.close()
     print 'Finished building features.'

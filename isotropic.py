@@ -333,7 +333,7 @@ def reveal_matcher(game, match, player):
     if 'cards' in match.groupdict():
         foreach_card(match.group('cards'), lambda card: game.reveal(card, player))
     if 'card' in match.groupdict():
-        game.reveal(match.group('card', player))
+        game.reveal(match.group('card'), player)
 add_game_regex(r'(?:(?P<player>.+) )?reveal(?:ing|s) ' + card_list_regex_piece + r'(?: and put(?:ting|s) (?:them|it) [io]n the hand| and keeping (?:them|it)| and discarding (?:them|it))?\.', reveal_matcher)
 
 # Used by Loan
@@ -519,7 +519,7 @@ add_game_regex(r'setting aside nothing\.')
 
 # Mint
 # Matches: ... revealing a <card> and gaining another one.
-add_game_regex(r'revealing a ' + card_regex_piece + r' and gaining another one\.', gain_matcher)
+add_game_regex(r'revealing an? ' + card_regex_piece + r' and gaining another one\.', gain_matcher)
 # Matches: ... but reveals no treasure card.
 add_game_regex(r'but reveals no treasure card\.')
 
@@ -556,19 +556,20 @@ add_game_regex(r'but has no cards to discard\.')
 
 # Tunnel
 # Matches: ... <player> reveal[ing|s] a <reveal> and gain[ing|s] a <gain>.
-add_game_regex(r'(?:(?P<player>.+) )?reveal(?:ing|s) a ' + card_regex_piece_formatable.format('reveal') + r' and gain(?:ing|s) (?:a ' + card_regex_piece + r'|nothing)\.', gain_matcher)
+add_game_regex(r'(?:(?P<player>.+) )?reveal(?:ing|s) an? ' + card_regex_piece_formatable.format('reveal') + r' and gain(?:ing|s) (?:an? ' + card_regex_piece + r'|nothing)\.', gain_matcher)
 
 # Ambassador
 # Matches: ... returning n copies to the supply.
 def ambassador_matcher(game, match, player):
     # This should just be a single card
-    assert len(game.get_revealed()) == 1, "Unexpected number of revealed cards when playing Ambassador"
-    for card in game.get_revealed():
-        if 'copies' in match.groupdict():
-            for i in range(int(match.group('copies'))):
-                game.return_to_supply(card, player)
-        else:
+    assert len(game.get_revealed()) > 0, "Unexpected number of revealed cards when playing Ambassador: {0}".format(len(game.get_revealed()))
+    #for card in game.get_revealed():
+    card = game.get_revealed()[-1]
+    if 'copies' in match.groupdict():
+        for i in range(int(match.group('copies'))):
             game.return_to_supply(card, player)
+    else:
+        game.return_to_supply(card, player)
 add_game_regex(r'returning (?P<copies>\d+) copies to the supply\.', ambassador_matcher)
 # Matches: ... returning it to the supply.
 add_game_regex(r'returning it to the supply\.', ambassador_matcher)
@@ -622,7 +623,7 @@ add_game_regex(r'(?P<player>.+) draws a card and puts it back\.')
 # Trader
 # Matches: ... <player> reveals a <span class=card-reaction>Trader</span> to gain a <silver> instead of a <card>.
 #  The card needs to be returned to the supply, as it was already gained. The silver doesn't need to be gained now though, as it will be gained on the next line.
-add_game_regex(r'(?P<player>.+) reveals a <span class=card-reaction>Trader</span> to gain an? ' + card_regex_piece_formatable.format('silver') + r' instead of an? ' + card_regex_piece + r'\.', lambda game, match, player: game.return_to_supply(match.group('card'), player))
+add_game_regex(r'(?P<player>.+) reveals a <span class=card-reaction>Trader</span> to gain an? ' + card_regex_piece_formatable.format('silver') + r' instead of an? ' + card_regex_piece + r'\.', lambda game, match, player: game.return_to_supply(match.group('card'), player, trader=True))
 
 # Inn
 # Matches: ... shuffling <cards> into the draw pile.
@@ -784,11 +785,13 @@ separator = '----------------------'
 
 # Events that can be registered. This isn't documented super well now, but the features.py file
 # has an example listener for each of these events.
-parsing_line_event = 'parsing_line' # Two arg (line_num, line)
-turn_complete_event = 'turn_complete' # No args
-unhandled_line_event = 'unhandled_line' # Two arg (line_num, line)
-unexpected_line_event = 'unexpected_line' # Three arg (line_num, line and regex [regex may be None])
-parse_complete_event = 'parse_complete' # No args
+parsing_line_event = 'parsing_line' # Three arg (game, line_num, line)
+turn_complete_event = 'turn_complete' # One arg (game)
+unhandled_line_event = 'unhandled_line' # Three arg (game, line_num, line)
+unexpected_line_event = 'unexpected_line' # Four arg (game, line_num, line and regex [regex may be None])
+parse_started_event = 'parse_start' # One arg (game)
+parse_complete_event = 'parse_complete' # One arg (game)
+parse_aborted_event = 'parse_abort' # Three arg (game, line_num, abort code)
 
 # Reasons for aborting
 assertion_abort = -1
@@ -796,10 +799,12 @@ single_player_abort = -2
 resignation_abort = -3
 tie_abort = -4
 invalid_end_state_abort = -5
+illegal_player_name_abort = -6
 
 # Most recent assertion that failed
 assertion_exception = None
 end_state_errors = None
+illegal_player_name = None
 
 def abort_string(abort):
     if abort == assertion_abort:
@@ -812,6 +817,8 @@ def abort_string(abort):
         return "Tie Game"
     elif abort == invalid_end_state_abort:
         return "Invalid End State{0}".format(":\n{0}".format('\n'.join(end_state_errors)) if end_state_errors else "")
+    elif abort == illegal_player_name_abort:
+        return "Illegal Player Name{0}".format(": '{0}'".format(illegal_player_name) if illegal_player_name else "")
     else:
         return "Unknown Reason"
 
@@ -846,6 +853,7 @@ class isotropic_parser:
         self.line_num = 0
         self.players = [] # cache list of players for regex player validation
         self.abort = False
+        self.handle_event(parse_started_event)
         
         try:
             self.read_header()
@@ -871,8 +879,15 @@ class isotropic_parser:
             
         self.file.close()
         if not self.abort:
-            return self.unhandled_lines # Return the number of lines that were not matched
+            if self.unhandled_lines == 0:
+                #print 'Parsing complete.'
+                self.handle_event(parse_complete_event)
+                return 0
+            else:
+                self.handle_event(parse_aborted_event, self.line_num, self.unhandled_lines)
+                return self.unhandled_lines # Return the number of lines that were not matched
         else:
+            self.handle_event(parse_aborted_event, self.line_num, self.abort)
             return self.abort # Aborting means this file should be skipped, as it is invalid for some reason (single player, players resigned, unprocessed cards)
         
     def read_header(self):
@@ -930,6 +945,9 @@ class isotropic_parser:
                     return
                 place = int(match.group('place'))
                 player = match.group('player')
+                if player.startswith('... '):
+                    self.abort = illegal_player_name_abort
+                    return
                 score = int(match.group('score'))
                 turns = int(match.group('turns'))
                 cards = match.group('cards')
@@ -1019,8 +1037,6 @@ class isotropic_parser:
             if self.abort:
                 return
             
-        #print 'Parsing complete.'
-        self.handle_event(parse_complete_event)
         # TODO: Read the footer? It doesn't really have any new information though.
             
     def match_turn_order(self, turn_order_line):
