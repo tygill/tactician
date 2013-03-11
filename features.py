@@ -80,7 +80,7 @@ class feature_extractor:
         
     def write_instance(self, game, output):
         # Extract the information from the current game state and log it
-        instance = ','.join([str(feature(game)) for feature in self.features]) + ',{0},{1}\n'.format(output, game.calc_output_weight())
+        instance = ','.join([str(feature(game)) for feature in self.features]) + ',{0},{1}'.format(output, game.calc_output_weight())
         self.pending_instances.append(instance)
         #for feature in self.features:
         #    self.file.write(str(feature(game)) + ',')
