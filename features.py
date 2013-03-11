@@ -12,6 +12,8 @@ class feature_extractor:
     
     def __init__(self, filename):
         self.file = open(filename, 'w')
+        self.file.write('@RELATION dominion\n\n')
+
         self.features = []
         self.pending_instances = []
         self.files = 0
@@ -43,15 +45,18 @@ class feature_extractor:
         ##for card in sorted_cards:
         ##    self.add_card_output_feature(card)
         
-    def add_feature(self, func, name):
-        self.file.write("Adding feature: {0}\n".format(name))
+        # Close the features
+        self.file.write('\n@DATA:\n')
+        
+    def add_feature(self, func, name, values = 'REAL'):
+        self.file.write("@ATTRIBUTE '{0}' {1}\n".format(name, values if isinstance(values, basestring) else '{' + ','.join(map(str, values)) + '}'))
         self.features.append(func)
         
     def add_card_in_supply_feature(self, card):
-        self.add_feature(lambda game: 1 if game.is_card_in_supply(card) else 0, card)
+        self.add_feature(lambda game: 1 if game.is_card_in_supply(card) else 0, card, [0, 1])
         
     def add_card_output_feature(self, card):
-        self.add_feature(lambda game: game.calc_output_weight() if card in game.get_cards_bought() else 0, "Output: {0}".format(card))
+        self.add_feature(lambda game: game.calc_output_weight() if card in game.get_cards_bought() else 0, "Output: {0}".format(card), [])
         
     def parsing_line_handler(self, game, line_num, line):
         #print 'Parsing line: {0}'.format(line)

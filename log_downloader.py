@@ -73,8 +73,8 @@ if __name__ == '__main__':
         os.makedirs(download_dir)
     if not os.path.exists(extracted_dir):
         os.makedirs(extracted_dir)
-    #if not os.path.exists(extraction_dir):
-    #    os.makedirs(extraction_dir)
+    if not os.path.exists(extraction_root_dir):
+        os.makedirs(extraction_root_dir)
     
     # Move all the files that were previously extracted to their new folders
     for file in os.listdir(extraction_root_dir):
