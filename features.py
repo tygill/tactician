@@ -35,7 +35,11 @@ class feature_extractor:
         self.add_feature(lambda game: game.get_player().get_action_card_ratio(), "Deck Action Card Ratio")
         self.add_feature(lambda game: game.get_player().get_victory_card_ratio(), "Deck Victory Card Ratio")
         self.add_feature(lambda game: game.get_player().get_treasure_card_ratio(), "Deck Treasure Card Ratio")
-            
+        self.add_feature(lambda game: game.turn_number, "Turn Number")
+        self.add_feature(lambda game: game.money, "Money")
+        self.add_feature(lambda game: game.buys, "Buys")
+        self.add_feature(lambda game: game.actions, "Actions")
+        
             
         # Add a separator
         ##self.add_feature(lambda game: "Outputs")
@@ -44,6 +48,10 @@ class feature_extractor:
         # Add the outputs (plural! a single, continuous output for every card that can be bought!)
         ##for card in sorted_cards:
         ##    self.add_card_output_feature(card)
+        
+        # Output features are hard coded in.
+        self.file.write("@ATTRIBUTE 'Card Bought' {None," + ','.join(cards) + '}\n')
+        self.file.write("@ATTRIBUTE 'Card Output Weight' REAL\n")
         
         # Close the features
         self.file.write('\n@DATA:\n')
@@ -156,7 +164,7 @@ def process_file(dirname, filename):
     
 if __name__ == '__main__':
     parser = isotropic_parser()
-    features = feature_extractor('features.txt')
+    features = feature_extractor('features.arff')
     parser.register_handler(parsing_line_event, features.parsing_line_handler)
     parser.register_handler(turn_complete_event, features.turn_complete_handler)
     parser.register_handler(unhandled_line_event, features.unhandled_line_handler)

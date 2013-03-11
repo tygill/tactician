@@ -283,7 +283,11 @@ class dominion_game:
         
     # This calculates the score ratio for each player for the game
     def calc_output_weight(self, player = None):
-        player = self.get_player(player)
+        # If there was a possessor...
+        if not self.possessor:
+            player = self.get_player(player)
+        else:
+            player = self.get_player(self.possessor)
         if player.get_output_weight():
             return player.get_output_weight()
         else:
@@ -385,6 +389,8 @@ class dominion_game:
             
         # Update the ratios in the current players deck
         self.get_player().update_ratios()
+        if self.possessor:
+            self.get_player(self.possessor).update_ratios()
         
         self.money = 0 # Current money
         self.actions = 1

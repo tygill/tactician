@@ -12,7 +12,7 @@ import os.path
 def download_file(url, filename_download, filename):
     start = time.time()
     if filename == None:
-        filename = url.split('/')[-1]
+        filename = os.path.basename(url)
     u = urllib2.urlopen(url)
     f = open(filename_download, 'wb')
     meta = u.info()
@@ -38,7 +38,7 @@ def download_file(url, filename_download, filename):
     
 def extract_file(extraction_dir, filename, finished_name):
     start = time.time()
-    name = filename.split('/')[-1]
+    name = os.path.basename(filename)
     match = re.match(r'(?P<year>\d+)\-(?P<month>\d+)\-(?P<day>\d+)\.tar\.bz2', name)
     if match:
         year = int(match.group('year'))
