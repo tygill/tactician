@@ -6,6 +6,9 @@ from optparse import OptionParser
 
 def pr(s):
     print s.encode('utf-8')
+    
+def clean(card):
+    return card.replace("'", "").replace(" ", "_")
 
 # This class handles logging features to be trained on
 class feature_extractor:
@@ -50,21 +53,21 @@ class feature_extractor:
         ##    self.add_card_output_feature(card)
         
         # Output features are hard coded in.
-        self.file.write("@ATTRIBUTE 'Card Bought' {None," + ','.join(cards) + '}\n')
-        self.file.write("@ATTRIBUTE 'Card Output Weight' REAL\n")
+        self.file.write("@ATTRIBUTE 'Card_Bought' {None," + ','.join(map(clean, cards)) + '}\n')
+        self.file.write("@ATTRIBUTE 'Card_Output_Weight' REAL\n")
         
         # Close the features
         self.file.write('\n@DATA:\n')
         
     def add_feature(self, func, name, values = 'REAL'):
-        self.file.write("@ATTRIBUTE '{0}' {1}\n".format(name, values if isinstance(values, basestring) else '{' + ','.join(map(str, values)) + '}'))
+        self.file.write("@ATTRIBUTE '{0}' {1}\n".format(clean(name), values if isinstance(values, basestring) else '{' + ','.join(map(str, values)) + '}'))
         self.features.append(func)
         
     def add_card_in_supply_feature(self, card):
         self.add_feature(lambda game: 1 if game.is_card_in_supply(card) else 0, card, [0, 1])
         
-    def add_card_output_feature(self, card):
-        self.add_feature(lambda game: game.calc_output_weight() if card in game.get_cards_bought() else 0, "Output: {0}".format(card), [])
+    #def add_card_output_feature(self, card):
+    #    self.add_feature(lambda game: game.calc_output_weight() if card in game.get_cards_bought() else 0, "Output: {0}".format(card), [])
         
     def parsing_line_handler(self, game, line_num, line):
         #print 'Parsing line: {0}'.format(line)
@@ -73,20 +76,15 @@ class feature_extractor:
     def turn_complete_handler(self, game):
         # Each card bought is a separate instance
         if game.get_cards_bought():
-            for card_bought in game.get_cards_bought():
-                self.write_instance(game, card_bought)
+            for card in game.get_cards_bought():
+                self.write_instance(game, card)
         else:
             self.write_instance(game, 'None')
         
-    def write_instance(self, game, output):
+    def write_instance(self, game, card):
         # Extract the information from the current game state and log it
-        instance = ','.join([str(feature(game)) for feature in self.features]) + ',{0},{1}'.format(output, game.calc_output_weight())
+        instance = ','.join([str(feature(game)) for feature in self.features]) + ',{0},{1}'.format(clean(card), game.calc_output_weight())
         self.pending_instances.append(instance)
-        #for feature in self.features:
-        #    self.file.write(str(feature(game)) + ',')
-        ## Write the output (its not a traditional feature!)
-        #self.file.write('{0},{1}\n'.format(output, game.calc_output_weight()))
-        #self.instances += 1
         
     def unhandled_line_handler(self, game, line_num, line):
         pr('{0}: Unhandled line: {1}'.format(line_num, line))
