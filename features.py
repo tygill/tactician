@@ -67,7 +67,7 @@ class feature_extractor:
         
     def write_instance(self, game, output):
         # Extract the information from the current game state and log it
-        instance = ','.join([str(feature(game)) for feature in self.features]) + '{0},{1}\n'.format(output, game.calc_output_weight())
+        instance = ','.join([str(feature(game)) for feature in self.features]) + ',{0},{1}\n'.format(output, game.calc_output_weight())
         self.pending_instances.append(instance)
         #for feature in self.features:
         #    self.file.write(str(feature(game)) + ',')
@@ -115,8 +115,15 @@ def rename(filename, src, dest):
     old = os.path.join(src, filename)
     new = os.path.join(dest, filename)
     if old != new:
-        print 'Moving {0} from\n {1} to\n {2}'.format(filename, src, dest)
-        os.rename(old, new)
+        print 'Moving {0} from\n {1}\n to\n {2}'.format(filename, src, dest)
+        try:
+            os.rename(old, new)
+        except OSError:
+            # The file must have already existed, so try to delete the old file and replace it
+            if os.path.exists(new):
+                os.remote(new)
+            # Now try again
+            os.rename(old, new)
     
 def process_file(dirname, filename):
     file = os.path.join(dirname, filename)
@@ -129,6 +136,9 @@ def process_file(dirname, filename):
         print 'Aborting: {0}'.format(abort_string(error))
         if error == assertion_abort or error == invalid_end_state_abort:
             rename(filename, dirname, error_path)
+        elif error == incomplete_file_abort:
+            # Delete the file, as reextracting it will put the complete file here.
+            os.remove(file)
         else:
             rename(filename, dirname, ignore_path)
     else:

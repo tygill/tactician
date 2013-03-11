@@ -129,7 +129,7 @@ class dominion_player:
         ret = []
         errors = compare_decks(self.final_deck, self.deck)
         if errors:
-            ret.append('Mismatch in player deck: {0}'.format(self.name))
+            ret.append('Mismatch in player deck: {0}'.format(self.name.encode('utf-8')))
             for error in errors:
                 ret.append(' {0}'.format(error))
         return ret

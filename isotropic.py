@@ -769,6 +769,8 @@ add_game_regex(r'(?P<player>.+) has no card to reveal\.')
 # Ill-Gotten Gains
 # Matches: ... gaining nothing in the hand.
 add_game_regex(r'gaining nothing in the hand\.')
+# Matches: ... revealing a <card> and gaining nothing.
+add_game_regex(r'revealing an? ' + card_regex_piece + r' but gaining nothing\.')
 
 # Fool's Gold
 # Matches: ... revealing a <card> but gaining nothing.
@@ -800,6 +802,7 @@ resignation_abort = -3
 tie_abort = -4
 invalid_end_state_abort = -5
 illegal_player_name_abort = -6
+incomplete_file_abort = -7
 
 # Most recent assertion that failed
 assertion_exception = None
@@ -819,6 +822,8 @@ def abort_string(abort):
         return "Invalid End State{0}".format(":\n{0}".format('\n'.join(end_state_errors)) if end_state_errors else "")
     elif abort == illegal_player_name_abort:
         return "Illegal Player Name{0}".format(": '{0}'".format(illegal_player_name) if illegal_player_name else "")
+    elif abort == incomplete_file_abort:
+        return "Incomplete File (didn't finish extracting, most likely."
     else:
         return "Unknown Reason"
 
@@ -876,6 +881,9 @@ class isotropic_parser:
             global assertion_exception
             assertion_exception = "{0}: {1}".format(self.line_num, e)
             self.abort = assertion_abort
+        except StopIteration:
+            # The next() iterator on the file most likely raised this because the file wasn't completely extracted
+            self.abort = incomplete_file_abort
             
         self.file.close()
         if not self.abort:
