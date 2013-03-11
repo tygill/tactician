@@ -163,11 +163,13 @@ if __name__ == '__main__':
     process_ignored = '-i' in sys.argv
     process_unhandled = '-u' in sys.argv
     process_errors = '-e' in sys.argv
+    process_main = '-ng' not in sys.argv
     if '-h' in sys.argv:
         print 'Command line args:'
         print ' -i: Reprocess ignored directory'
         print ' -u: Reprocess unhandled directory'
         print ' -e: Reprocess error directory'
+        print ' -ng: Don\'t process the main directory'
         exit(0)
     
     # Process ignored files
@@ -190,17 +192,18 @@ if __name__ == '__main__':
     
     # Iterate over all files in the log path
     # http://stackoverflow.com/questions/120656/directory-listing-in-python
-    for dirname, dirnames, filenames in os.walk(log_path):
-        for filename in filenames:
-            process_file(dirname, filename)
-        # Don't walk over the other paths, as they are iterated separately.
-        if ignore_path in dirnames:
-            dirnames.remove(ignore_path)
-        if error_path in dirnames:
-            dirnames.remove(error_path)
-        if unhandled_path in dirnames:
-            dirnames.remove(unhandled_path)
+    if process_main:
+        for dirname, dirnames, filenames in os.walk(log_path):
+            for filename in filenames:
+                process_file(dirname, filename)
+            # Don't walk over the other paths, as they are iterated separately.
+            if ignore_path in dirnames:
+                dirnames.remove(ignore_path)
+            if error_path in dirnames:
+                dirnames.remove(error_path)
+            if unhandled_path in dirnames:
+                dirnames.remove(unhandled_path)
     
     features.close()
     print 'Finished building features.'
-    print 'Built {0} instances from {1} files.'.format(features.instances, files)
+    print 'Built {0} instances from {1} files.'.format(features.instances, features.files)
