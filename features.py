@@ -67,7 +67,7 @@ class feature_extractor:
         
             
         # Output features are hard coded in.
-        self.file.write("@ATTRIBUTE 'Card_Bought' {None," + ','.join(map(clean, cards)) + '}\n')
+        self.file.write("@ATTRIBUTE 'Card_Bought' {None," + ','.join(map(clean, sorted_cards)) + '}\n')
         self.file.write("@ATTRIBUTE 'Card_Output_Weight' REAL\n")
         
         # Close the features

@@ -543,7 +543,7 @@ class dominion_game:
         # If a watchtower was revealed just before this,
         if player is None and len(self.revealed) == 1 and self.revealed[0] == 'Watchtower':
             # The card being trashed should match the card that was being gained before
-            # This assert is skipped because if multiple cards are gained at once and both are watchtowered (e.g., Copper and Curse from Montebank), this would fail.
+            # This assert is skipped because if multiple cards are gained at once and both are watchtowered (e.g., Copper and Curse from Mountebank), this would fail.
             #assert self.last_card_gained == card, "Redirecting trashing a {0} to player '{1}' after Watchtower: Expected {2}".format(card, self.get_player(self.last_player_to_gain).name, self.last_card_gained)
             # Then this card should be trashed by another player
             player = self.last_player_to_gain
@@ -569,7 +569,8 @@ class dominion_game:
         assert_card(card)
         # If this is a trader, and there was no line showing that the card being returned was actually gained just before this, then don't return it.
         # Trader has this problem when combined with Ill-Gotten Gains' free Copper.
-        if self.last_card_gained != card and trader:
+        # But, to prevent the case of Mountebank's two consequtive gains, additionally check to see if the player returning a card isn't the same as the current player
+        if self.last_card_gained != card and self.get_player() is self.get_player(player) and trader:
             return
         self.get_player(player).trash(card)
         incr_value(self.supply, card)
