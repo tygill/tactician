@@ -19,6 +19,7 @@ drawing_cards = set()
 cursing_cards = set()
 trashing_cards = set()
 attack_cards = set()
+supply_cards = set()
 
 victory_point_symbol = unichr(9660) # u"\u25BC"
 potion_cost_symbol = unichr(9673) # u"\u25C9"
@@ -729,7 +730,7 @@ class dominion_game:
         else:
             return 0
             
-def add_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
+def add_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
     cards.add(card)
     if plural is None:
         # By default, the plural of a card is just an 's' added to the end
@@ -748,40 +749,42 @@ def add_card(card, plural = None, actions=False, buys=False, draws=False, curse=
         trashing_cards.add(card)
     if attack:
         attack_cards.add(card)
+    if supply:
+        supply_cards.add(card)
 
-def add_action_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
+def add_action_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
     action_cards.add(card)
-    add_card(card, plural, actions, buys, draws, curse, trash, attack)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
 
-def add_victory_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
+def add_victory_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
     victory_cards.add(card)
-    add_card(card, plural, actions, buys, draws, curse, trash, attack)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
     
-def add_treasure_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
+def add_treasure_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
     treasure_cards.add(card)
-    add_card(card, plural, actions, buys, draws, curse, trash, attack)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
 
-def add_curse_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
+def add_curse_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
     curse_cards.add(card)
-    add_card(card, plural, actions, buys, draws, curse, trash, attack)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
 
-def add_victory_treasure_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
+def add_victory_treasure_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
     victory_cards.add(card)
     treasure_cards.add(card)
-    add_card(card, plural, actions, buys, draws, curse, trash, attack)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
     
-def add_victory_action_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
+def add_victory_action_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
     victory_cards.add(card)
     action_cards.add(card)
-    add_card(card, plural, actions, buys, draws, curse, trash, attack)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
     
-def add_treasure_prize_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
+def add_treasure_prize_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=False):
     prize_cards.add(card)
-    add_treasure_card(card, actions, buys, draws, curse, trash, attack)
+    add_treasure_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
     
-def add_action_prize_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
+def add_action_prize_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=False):
     prize_cards.add(card)
-    add_action_card(card, actions, buys, draws, curse, trash, attack)
+    add_action_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
 
 # Base
 add_action_card('Adventurer')

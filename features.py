@@ -29,13 +29,13 @@ class feature_extractor:
         
     def init_features(self):
         # Get a sorted list of all cards
-        sorted_cards = sorted(cards)
+        sorted_supply_cards = sorted(supply_cards)
             
         # Add the features
         
         # Game features
         # Add the cards features
-        for card in sorted_cards:
+        for card in sorted_supply_cards:
             self.add_card_in_supply_feature(card)
         self.add_feature(lambda game: game.get_num_players(), "Number of Players")
         self.add_feature(lambda game: 1 if game.supply_contains_any(plus_action_cards) else 0, "+Action Cards in Supply?", [0, 1]) # +2 Action or more cards only. Chaining cards (+1 Action) don't count.
@@ -67,7 +67,7 @@ class feature_extractor:
         
             
         # Output features are hard coded in.
-        self.file.write("@ATTRIBUTE 'Card_Bought' {None," + ','.join(map(clean, sorted_cards)) + '}\n')
+        self.file.write("@ATTRIBUTE 'Card_Bought' {None," + ','.join(map(clean, sorted_supply_cards)) + '}\n')
         self.file.write("@ATTRIBUTE 'Card_Output_Weight' REAL\n")
         
         # Close the features
