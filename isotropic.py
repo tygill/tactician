@@ -292,10 +292,10 @@ add_game_regex(r'(?:(?P<player>.+) )?get(?:ting|s) \+(?P<actions>\d+) actions? a
 add_game_regex(r'getting \+(?P<actions>\d+) actions?, \+(?P<buys>\d+) buys?, and \+\$(?P<money>\d+)\.', default_matcher)
 
 # Matches: ... getting +n {vp}.
-add_game_regex(r'(?:(?P<player>.+) )?get(?:ting|s) \+(?P<vp>\d+) ' + get_victory_symbol() + r'\.', default_matcher)
+add_game_regex(r'(?:(?P<player>.+) )?get(?:ting|s) \+(?P<vp>\d+) ' + victory_point_symbol + r'\.', default_matcher)
 
 # Matches: ... getting +$2 and +1 {vp}.
-add_game_regex(r'getting \+\$(?P<money>\d+) and \+(?P<vp>\d+) ' + get_victory_symbol() + r'\.', default_matcher)
+add_game_regex(r'getting \+\$(?P<money>\d+) and \+(?P<vp>\d+) ' + victory_point_symbol + r'\.', default_matcher)
 
 # Matches: ... [making] [<player>] discard[ing|s] <cards>. ('making' is from Scrying Pool, and perhaps others)
 add_game_regex(r'(?:making )?(?:(?P<player>.+) )?discard(?:ing|s|) ' + card_list_regex_piece + r'\.')
@@ -342,7 +342,9 @@ add_game_regex(r'drawing and revealing ' + card_list_regex_piece + r'\.', reveal
 # Matches: ... revealing <cards> but has no treasure.
 add_game_regex(r'revealing ' + card_list_regex_piece + r' but has no treasure\.')
 # Matches: ... but has no cards to draw.
-add_game_regex(r'but has no cards to draw\.')
+add_game_regex(r'but has no cards? to draw\.')
+# Matches: ... <player> has no cards to draw.
+add_game_regex(r'(?P<player>.+) has no cards? to draw\.')
 
 # Card Specific Regexes
 # ---------------------
@@ -435,7 +437,7 @@ add_game_regex(r'returning ' + card_list_regex_piece + r' to the bottom of the <
 def bishop_trash_matcher(game, match, player):
     game.trash(match.group('card'), player)
     default_matcher(game, match, player)
-add_game_regex(r'(?P<player>.+) trashes an? ' + card_regex_piece + r' and gets \+(?P<vp>\d+) ' + get_victory_symbol() + r'\.', bishop_trash_matcher)
+add_game_regex(r'(?P<player>.+) trashes an? ' + card_regex_piece + r' and gets \+(?P<vp>\d+) ' + victory_point_symbol + r'\.', bishop_trash_matcher)
 # Matches: ... <player> has no cards to trash/in hand.
 add_game_regex(r'(?P<player>.+) has no cards (?:to trash|in hand)\.')
 
@@ -499,9 +501,9 @@ add_game_regex(r'(?P<player>.+) draws and discards ' + card_list_regex_piece + r
 # Matches: ... putting nothing into the hand.
 add_game_regex(r'putting nothing into the hand\.')
 
-# Develop
+# Develop / Transmute
 # Matches: ... but there's no $n[ or $n] card to gain.
-add_game_regex(r"but there's no \$(?P<cost1>-?\d+)(?: or \$(?P<cost2>-?\d+))? card to gain\.")
+add_game_regex(r"but there's no \$(?P<cost1>-?\d+)(?: " + potion_cost_symbol + r")*(?: or \$(?P<cost2>-?\d+)(?: " + potion_cost_symbol + r")*)? card to gain\.")
 
 # Watchtower
 # Matches: ... putting the <card> on the deck.
@@ -575,6 +577,8 @@ add_game_regex(r'returning (?P<copies>\d+) copies to the supply\.', ambassador_m
 add_game_regex(r'returning it to the supply\.', ambassador_matcher)
 # Matches: ... but has no card to reveal.
 add_game_regex(r'but has no card to reveal\.')
+# Matches: ... which can't be returned to the supply.
+add_game_regex(r"which can't be returned to the supply\.")
 
 # Horse Traders
 # Matches: ... setting it aside.

@@ -6,6 +6,10 @@ Inputs:
     0/1  - Is card in use? (202 kingdom cards that could be in the supply though...)
     0/1  - Is Curse in use?
     0/1  - Is Platinum/Colony in use?
+    0/1  - Are there +Action cards in the supply?
+    0/1  - Are there +Buy cards in the supply?
+    0/1  - Are there +Card cards in the supply?
+    0/1  - Are there trashing cards in the supply?
     0.12 - How many Colonies are left? (Percentage?)
     0.21 - How many Provinces are left? (Percentage?)
     0.12 - How many Duchies are left? (Percentage?)

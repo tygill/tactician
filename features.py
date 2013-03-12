@@ -30,28 +30,42 @@ class feature_extractor:
     def init_features(self):
         # Get a sorted list of all cards
         sorted_cards = sorted(cards)
+            
+        # Add the features
+        
+        # Game features
         # Add the cards features
         for card in sorted_cards:
             self.add_card_in_supply_feature(card)
-            
-        # Add the ratio features
-        self.add_feature(lambda game: game.get_player().get_action_card_ratio(), "Deck Action Card Ratio")
-        self.add_feature(lambda game: game.get_player().get_victory_card_ratio(), "Deck Victory Card Ratio")
-        self.add_feature(lambda game: game.get_player().get_treasure_card_ratio(), "Deck Treasure Card Ratio")
+        self.add_feature(lambda game: game.get_num_players(), "Number of Players")
+        self.add_feature(lambda game: 1 if game.supply_contains_any(plus_action_cards) else 0, "+Action Cards in Supply?", [0, 1]) # +2 Action or more cards only. Chaining cards (+1 Action) don't count.
+        self.add_feature(lambda game: 1 if game.supply_contains_any(plus_buy_cards) else 0, "+Buy Cards in Supply?", [0, 1])
+        self.add_feature(lambda game: 1 if game.supply_contains_any(drawing_cards) else 0, "Drawing Cards in Supply?", [0, 1]) # +2 Cards or more only. 
+        self.add_feature(lambda game: 1 if game.supply_contains_any(cursing_cards) else 0, "Cursing Cards in Supply?", [0, 1])
+        self.add_feature(lambda game: 1 if game.supply_contains_any(trashing_cards) else 0, "Trashing Cards in Supply?", [0, 1])
+        self.add_feature(lambda game: 1 if game.supply_contains_any(attack_cards) else 0, "Attack Cards in Supply?", [0, 1])
+        
+        # Move context features
         self.add_feature(lambda game: game.turn_number, "Turn Number")
         self.add_feature(lambda game: game.money, "Money")
         self.add_feature(lambda game: game.buys, "Buys")
         self.add_feature(lambda game: game.actions, "Actions")
         
+        # Game state features
+        self.add_feature(lambda game: game.get_num_empty_piles(), "Number of Empty Piles")
+        # Add features for how many of each victory card are left in the supply (in games where they aren't in the supply, I've set them to instead be however many there would to start if they would be in the supply)
+        for card in victory_cards:
+            self.add_feature(lambda game: game.get_supply_count(card, True), "{0} Left".format(pluralize_card(card)))
+        self.add_feature(lambda game: game.get_supply_count('Curse', True), "Curses Left")
+        
+        # Player deck stats
+        # Using game.get_player(game.possessor) gets the stats for the controlling player - either the possessor, or the regular player (as it will be None if there isn't a possessor, in which case the regular player will be retrieved.)
+        self.add_feature(lambda game: game.get_player(game.possessor).get_deck_size(), "Deck Size")
+        self.add_feature(lambda game: game.get_player(game.possessor).get_action_card_ratio(), "Deck Action Card Ratio")
+        self.add_feature(lambda game: game.get_player(game.possessor).get_victory_card_ratio(), "Deck Victory Card Ratio")
+        self.add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_ratio(), "Deck Treasure Card Ratio")
+        
             
-        # Add a separator
-        ##self.add_feature(lambda game: "Outputs")
-        
-        # This adds lots of more finely weighted output features
-        # Add the outputs (plural! a single, continuous output for every card that can be bought!)
-        ##for card in sorted_cards:
-        ##    self.add_card_output_feature(card)
-        
         # Output features are hard coded in.
         self.file.write("@ATTRIBUTE 'Card_Bought' {None," + ','.join(map(clean, cards)) + '}\n')
         self.file.write("@ATTRIBUTE 'Card_Output_Weight' REAL\n")
@@ -64,10 +78,7 @@ class feature_extractor:
         self.features.append(func)
         
     def add_card_in_supply_feature(self, card):
-        self.add_feature(lambda game: 1 if game.is_card_in_supply(card) else 0, card, [0, 1])
-        
-    #def add_card_output_feature(self, card):
-    #    self.add_feature(lambda game: game.calc_output_weight() if card in game.get_cards_bought() else 0, "Output: {0}".format(card), [])
+        self.add_feature(lambda game: 1 if game.is_card_in_supply(card) else 0, '{0} in Supply?'.format(card), [0, 1])
         
     def parsing_line_handler(self, game, line_num, line):
         #print 'Parsing line: {0}'.format(line)
@@ -83,18 +94,18 @@ class feature_extractor:
         
     def write_instance(self, game, card):
         # Extract the information from the current game state and log it
-        instance = ','.join([str(feature(game)) for feature in self.features]) + ',{0},{1}'.format(clean(card), game.calc_output_weight())
+        instance = ','.join([str(feature(game)) for feature in self.features]) + ',{0},{1}'.format(clean(card), game.calc_output_weight(game.possessor)) # Using game.possessor will use either the possessing player, or the current player if there isn't a possessor.
         self.pending_instances.append(instance)
         
     def unhandled_line_handler(self, game, line_num, line):
-        pr('{0}: Unhandled line: {1}'.format(line_num, line))
+        pr(u'{0}: Unhandled line: {1}'.format(line_num, line))
         
     def unexpected_line_handler(self, game, line_num, line, regex = None):
         print
         if regex:
-            pr('{0}: Unexpected line: {1} (Expected: {2})'.format(line_num, line, regex))
+            pr(u'{0}: Unexpected line: {1} (Expected: {2})'.format(line_num, line, regex))
         else:
-            pr('{0}: Unexpected line: {1}'.format(line_num, line))
+            pr(u'{0}: Unexpected line: {1}'.format(line_num, line))
             
     def parse_started_handler(self, game):
         pass
@@ -110,8 +121,8 @@ class feature_extractor:
     def parse_aborted_handler(self, game, line_num, error):
         del self.pending_instances[:]
         
-log_path = 'games'
 subdir_path = os.path.join('{0:04}', '{1:02}', '{2:02}')
+log_path = 'games'
 ignore_path = os.path.join(log_path, 'ignored')
 error_path = os.path.join(log_path, 'error')
 unhandled_path = os.path.join(log_path, 'unhandled')
@@ -127,6 +138,8 @@ def rename(filename, src, dest):
     new = os.path.join(dest, filename)
     if old != new:
         print 'Moving {0} from\n {1}\n to\n {2}'.format(filename, src, dest)
+        if not os.path.exists(dest):
+            os.makedirs(dest)
         try:
             os.rename(old, new)
         except OSError:
@@ -137,6 +150,11 @@ def rename(filename, src, dest):
             os.rename(old, new)
     
 def process_file(dirname, filename):
+    match = re.match(r'game-(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})-\d{6}-[\d\w]{8}\.html', filename)
+    if match:
+        year = int(match.group('year'))
+        month = int(match.group('month'))
+        day = int(match.group('day'))
     file = os.path.join(dirname, filename)
     print 'Parsing: {0}'.format(file)
     error = parser.read(file)
@@ -151,14 +169,9 @@ def process_file(dirname, filename):
             # Delete the file, as reextracting it will put the complete file here.
             os.remove(file)
         else:
-            rename(filename, dirname, ignore_path)
+            rename(filename, dirname, os.path.join(ignore_path, subdir_path.format(year, month, day)))
     else:
-        match = re.match(r'game-(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})-\d{6}-[\d\w]{8}\.html', filename)
-        if match:
-            year = int(match.group('year'))
-            month = int(match.group('month'))
-            day = int(match.group('day'))
-            rename(filename, dirname, os.path.join(log_path, subdir_path.format(year, month, day)))
+        rename(filename, dirname, os.path.join(log_path, subdir_path.format(year, month, day)))
     
 if __name__ == '__main__':
     parser = isotropic_parser()
@@ -185,21 +198,21 @@ if __name__ == '__main__':
     
     # Process ignored files
     if process_ignored:
-        for filename in os.listdir(ignore_path):
-            if os.path.isfile(os.path.join(ignore_path, filename)):
-                process_file(ignore_path, filename)
+        for dirname, dirnames, filenames in os.walk(ignore_path):
+            for filename in filenames:
+                process_file(dirname, filename)
     
     # Process errored files
     if process_errors:
-        for filename in os.listdir(error_path):
-            if os.path.isfile(os.path.join(error_path, filename)):
-                process_file(error_path, filename)
+        for dirname, dirnames, filenames in os.walk(error_path):
+            for filename in filenames:
+                process_file(dirname, filename)
     
     # Process unhandled files
     if process_unhandled:
-        for filename in os.listdir(unhandled_path):
-            if os.path.isfile(os.path.join(unhandled_path, filename)):
-                process_file(unhandled_path, filename)
+        for dirname, dirnames, filenames in os.walk(unhandled_path):
+            for filename in filenames:
+                process_file(dirname, filename)
     
     # Iterate over all files in the log path
     # http://stackoverflow.com/questions/120656/directory-listing-in-python
@@ -208,6 +221,7 @@ if __name__ == '__main__':
             for filename in filenames:
                 process_file(dirname, filename)
             # Don't walk over the other paths, as they are iterated separately.
+            # This assumes that these folders are all subfolders of the main log folder, which should currently be the case.
             if ignore_path in dirnames:
                 dirnames.remove(ignore_path)
             if error_path in dirnames:

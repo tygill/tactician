@@ -5,16 +5,24 @@
 cards = set()
 # This maps the card plurals to the singular
 plural_cards = {}
+pluralizer = {}
+
 action_cards = set()
 victory_cards = set()
 treasure_cards = set()
 curse_cards = set()
 prize_cards = set()
 
-victory_point_symbol = unichr(9660)
+plus_action_cards = set()
+plus_buy_cards = set()
+drawing_cards = set()
+cursing_cards = set()
+trashing_cards = set()
+attack_cards = set()
 
-def get_victory_symbol():
-    return victory_point_symbol
+victory_point_symbol = unichr(9660) # u"\u25BC"
+potion_cost_symbol = unichr(9673) # u"\u25C9"
+
 
 # This does not check plural cards - the card must be sanitized if its plural
 def is_card(card):
@@ -30,6 +38,12 @@ def sanitize_card(card):
         return card
     elif card in plural_cards:
         return plural_cards[card]
+    else:
+        return None
+        
+def pluralize_card(card):
+    if card in pluralizer:
+        return pluralizer[card]
     else:
         return None
 
@@ -115,6 +129,7 @@ class dominion_player:
         self.action_card_ratio = 0
         self.victory_card_ratio = 0
         self.treasure_card_ratio = 0
+        self.deck_size = 0
         
     def set_final_score(self, score):
         self.final_score = score
@@ -149,7 +164,10 @@ class dominion_player:
     def get_treasure_card_ratio(self):
         return self.treasure_card_ratio
         
-    def update_ratios(self):
+    def get_deck_size(self):
+        return self.deck_size
+        
+    def update_properties(self):
         actions = 0.0
         victories = 0.0
         treasures = 0.0
@@ -166,6 +184,7 @@ class dominion_player:
         self.action_card_ratio = actions / total if total > 0 else 0
         self.victory_card_ratio = victories / total if total > 0 else 0
         self.treasure_card_ratio = treasures / total if total > 0 else 0
+        self.deck_size = total
         
     # Game State Modifiers
     
@@ -283,11 +302,7 @@ class dominion_game:
         
     # This calculates the score ratio for each player for the game
     def calc_output_weight(self, player = None):
-        # If there was a possessor...
-        if not self.possessor:
-            player = self.get_player(player)
-        else:
-            player = self.get_player(self.possessor)
+        player = self.get_player(player)
         if player.get_output_weight():
             return player.get_output_weight()
         else:
@@ -388,9 +403,9 @@ class dominion_game:
             self.turn_number = turn_number
             
         # Update the ratios in the current players deck
-        self.get_player().update_ratios()
+        self.get_player().update_properties()
         if self.possessor:
-            self.get_player(self.possessor).update_ratios()
+            self.get_player(self.possessor).update_properties()
         
         self.money = 0 # Current money
         self.actions = 1
@@ -591,6 +606,28 @@ class dominion_game:
     def is_card_in_supply(self, card):
         return card in self.supply.keys()
         
+    def get_supply_count(self, card, use_initial_value = False):
+        if card in self.supply.keys():
+            return self.supply[card]
+        else:
+            if use_initial_value:
+                return self.victory_card_initial_supply(card)
+            else:
+                return None
+                
+    def supply_contains_any(self, cards):
+        for card in self.supply.keys():
+            if card in cards:
+                return True
+        return False
+        
+    def get_num_empty_piles(self):
+        total = 0
+        for count in self.supply.values():
+            if count == 0:
+                total += 1
+        return total
+        
     def get_revealed(self):
         return self.revealed
     
@@ -691,212 +728,231 @@ class dominion_game:
         else:
             return 0
             
-def add_card(card, plural = None):
+def add_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
     cards.add(card)
     if plural is None:
         # By default, the plural of a card is just an 's' added to the end
         plural = card + 's'
     plural_cards[plural] = card
+    pluralizer[card] = plural
+    if actions:
+        plus_action_cards.add(card)
+    if buys:
+        plus_buy_cards.add(card)
+    if draws:
+        drawing_cards.add(card)
+    if curse:
+        cursing_cards.add(card)
+    if trash:
+        trashing_cards.add(card)
+    if attack:
+        attack_cards.add(card)
 
-def add_action_card(card, plural = None):
+def add_action_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
     action_cards.add(card)
-    add_card(card, plural)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack)
 
-def add_victory_card(card, plural = None):
+def add_victory_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
     victory_cards.add(card)
-    add_card(card, plural)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack)
     
-def add_treasure_card(card, plural = None):
+def add_treasure_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
     treasure_cards.add(card)
-    add_card(card, plural)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack)
 
-def add_curse_card(card, plural = None):
+def add_curse_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
     curse_cards.add(card)
-    add_card(card, plural)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack)
 
-def add_victory_treasure_card(card, plural = None):
+def add_victory_treasure_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
     victory_cards.add(card)
     treasure_cards.add(card)
-    add_card(card, plural)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack)
     
-def add_victory_action_card(card, plural = None):
+def add_victory_action_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
     victory_cards.add(card)
     action_cards.add(card)
-    add_card(card, plural)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack)
     
-def add_treasure_prize_card(card, plural = None):
+def add_treasure_prize_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
     prize_cards.add(card)
-    add_treasure_card(card)
+    add_treasure_card(card, actions, buys, draws, curse, trash, attack)
     
-def add_action_prize_card(card, plural = None):
+def add_action_prize_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False):
     prize_cards.add(card)
-    add_action_card(card)
+    add_action_card(card, actions, buys, draws, curse, trash, attack)
 
-add_action_card('Moat')
+# Base
 add_action_card('Adventurer')
-add_action_card('Bureaucrat')
-add_action_card('Cellar')
+add_action_card('Bureaucrat', attack=True)
+add_action_card('Cellar', draws=True)
 add_action_card('Chancellor')
-add_action_card('Chapel')
-add_action_card('Council Room')
+add_action_card('Chapel', trash=True)
+add_action_card('Council Room', draws=True, buys=True)
 add_action_card('Feast')
-add_action_card('Festival')
-add_action_card('Laboratory', 'Laboratories')
-add_action_card('Library', 'Libraries')
-add_action_card('Market')
-add_action_card('Militia')
+add_action_card('Festival', actions=True, buys=True)
+add_victory_card('Gardens', 'Gardens')
+add_action_card('Laboratory', 'Laboratories', draws=True)
+add_action_card('Library', 'Libraries', draws=True)
+add_action_card('Market', buys=True)
+add_action_card('Militia', attack=True)
 add_action_card('Mine')
+add_action_card('Moat', draws=True)
 add_action_card('Moneylender')
-add_action_card('Remodel')
-add_action_card('Smithy', 'Smithies')
-add_action_card('Spy', 'Spies')
-add_action_card('Thief', 'Thieves')
-add_action_card('Throne Room')
-add_action_card('Village')
-add_action_card('Witch', 'Witches')
-add_action_card('Woodcutter')
+add_action_card('Remodel', trash=True)
+add_action_card('Smithy', 'Smithies', draws=True)
+add_action_card('Spy', 'Spies', attack=True)
+add_action_card('Thief', 'Thieves', attack=True)
+add_action_card('Throne Room', actions=True, draws=True) # Not quite sure on this one, but Throne Room combined with lots of other cards can give you extra actions and draws, so I'll count it. Better to round up.
+add_action_card('Village', actions=True)
+add_action_card('Witch', 'Witches', draws=True, attack=True, curse=True)
+add_action_card('Woodcutter', buys=True)
 add_action_card('Workshop')
 
-add_action_card('Secret Chamber')
-add_action_card('Coppersmith')
-add_action_card('Courtyard')
-add_action_card('Torturer')
-add_action_card('Baron')
-add_action_card('Bridge')
+# Intrigue
+add_action_card('Baron', buys=True)
+add_action_card('Bridge', buys=True)
 add_action_card('Conspirator')
+add_action_card('Coppersmith')
+add_action_card('Courtyard', draws=True)
+add_victory_card('Duke')
+add_victory_action_card('Great Hall')
+add_victory_treasure_card('Harem')
 add_action_card('Ironworks', 'Ironworks')
-add_action_card('Masquerade')
-add_action_card('Mining Village')
-add_action_card('Minion')
-add_action_card('Pawn')
-add_action_card('Saboteur')
-add_action_card('Shanty Town')
+add_action_card('Masquerade', draws=True)
+add_action_card('Mining Village', actions=True)
+add_action_card('Minion', draws=True, attack=True)
+add_victory_action_card('Nobles', 'Nobles', actions=True, draws=True)
+add_action_card('Pawn', buys=True)
+add_action_card('Saboteur', attack=True)
 add_action_card('Scout')
-add_action_card('Steward')
-add_action_card('Swindler')
-add_action_card('Trading Post')
-add_action_card('Wishing Well')
-add_action_card('Upgrade')
-add_action_card('Tribute')
+add_action_card('Secret Chamber')
+add_action_card('Shanty Town', actions=True, draws=True)
+add_action_card('Steward', draws=True, trash=True)
+add_action_card('Swindler', attack=True, curse=True) # Swindling Coppers can make you gain Curses, so this counts.
+add_action_card('Torturer', draws=True, attack=True, curse=True)
+add_action_card('Trading Post', trash=True)
+add_action_card('Tribute', actions=True, draws=True)
+add_action_card('Upgrade', trash=True)
+add_action_card('Wishing Well', draws=True) # On this and cards like it, if it has the potential to give you more cards or actions than it took to play it, it counts as giving actions or draws. Chaining cards (Scout, Upgrade, etc.) don't count, as they don't let you have more than a single action or increase the size of your hand.
 
-add_action_card('Haven')
-add_action_card('Sea Hag')
-add_action_card('Tactician')
-add_action_card('Caravan')
-add_action_card('Lighthouse')
-add_action_card('Fishing Village')
-add_action_card('Wharf', 'Wharves')
-add_action_card('Merchant Ship')
-add_action_card('Outpost')
-add_action_card('Ghost Ship')
-add_action_card('Salvager')
-add_action_card('Pirate Ship')
-add_action_card('Native Village')
-add_action_card('Cutpurse')
-add_action_card('Bazaar')
-add_action_card('Smugglers', 'Smugglers')
-add_action_card('Explorer')
-add_action_card('Pearl Diver')
-add_action_card('Treasure Map')
-add_action_card('Navigator')
-add_action_card('Treasury', 'Treasuries')
-add_action_card('Lookout')
-add_action_card('Ambassador')
-add_action_card('Warehouse')
+# Seaside
+add_action_card('Ambassador', attack=True, trash=True) # Not quite truly trashing...but essentially the same idea. It gets cards out of your deck.
+add_action_card('Bazaar', actions=True)
+add_action_card('Caravan', draws=True)
+add_action_card('Cutpurse', attack=True)
 add_action_card('Embargo', 'Embargoes')
+add_action_card('Explorer')
+add_action_card('Fishing Village', actions=True)
+add_action_card('Ghost Ship', draws=True, attack=True)
+add_action_card('Haven')
+add_victory_action_card('Island')
+add_action_card('Lighthouse')
+add_action_card('Lookout', trash=True)
+add_action_card('Merchant Ship')
+add_action_card('Native Village', actions=True, draws=True)
+add_action_card('Navigator')
+add_action_card('Outpost')
+add_action_card('Pearl Diver')
+add_action_card('Pirate Ship', attack=True)
+add_action_card('Salvager', buys=True, trash=True)
+add_action_card('Sea Hag', attack=True, curse=True)
+add_action_card('Smugglers', 'Smugglers')
+add_action_card('Tactician', actions=True, buys=True, draws=True)
+add_action_card('Treasure Map')
+add_action_card('Treasury', 'Treasuries')
+add_action_card('Warehouse', draws=True) # This doesn't let you have more cards in your hand, but it does let you draw and then choose what to discard, so it counts.
+add_action_card('Wharf', 'Wharves', draws=True, buys=True)
 
-add_action_card('Alchemist')
+# Alchemy
+add_action_card('Alchemist', draws=True)
 add_action_card('Apothecary', 'Apothecaries')
-add_action_card('Apprentice')
-add_action_card('Familiar')
-add_action_card('Golem')
+add_action_card('Apprentice', draws=True, trash=True)
+add_action_card('Familiar', attack=True, curse=True)
+add_action_card('Golem', actions=True) # It lets you play multiple actions in a single turn, so....I think I'll try counting this here.
 add_action_card('Herbalist')
+add_treasure_card('Philosopher\'s Stone')
 add_action_card('Possession')
-add_action_card('Scrying Pool')
-add_action_card('Transmute')
-add_action_card('University', 'Universities')
+add_action_card('Scrying Pool', draws=True, attack=True)
+add_action_card('Transmute', trash=True)
+add_action_card('University', 'Universities', actions=True)
+add_victory_card('Vineyard')
 
-add_action_card('Bishop')
-add_action_card('City', 'Cities')
+# Prosperity
+add_treasure_card('Bank')
+add_action_card('Bishop', trash=True)
+add_action_card('City', 'Cities', actions=True, draws=True)
+add_treasure_card('Contraband', buys=True)
 add_action_card('Counting House')
-add_action_card('Expand')
-add_action_card('Forge')
-add_action_card('Goons', 'Goons')
-add_action_card('Grand Market')
-add_action_card('King\'s Court')
+add_action_card('Expand', trash=True)
+add_action_card('Forge', trash=True)
+add_action_card('Goons', 'Goons', buys=True, attack=True)
+add_action_card('Grand Market', buys=True)
+add_treasure_card('Hoard')
+add_action_card('King\'s Court', actions=True, draws=True) # See my justification for Throne Room for this classification. Combining with +Actions and +Cards cards causes this to give both of them, so I'll count this here to be safe.
+add_treasure_card('Loan')
 add_action_card('Mint')
 add_action_card('Monument')
-add_action_card('Mountebank')
+add_action_card('Mountebank', attack=True, curse=True)
 add_action_card('Peddler')
-add_action_card('Rabble')
-add_action_card('Trade Route')
-add_action_card('Vault')
-add_action_card('Venture')
-add_action_card('Watchtower')
-add_action_card('Worker\'s Village')
-
-add_action_card('Farming Village')
-add_action_card('Fortune Teller')
-add_action_card('Hamlet')
-add_action_card('Harvest')
-add_action_card('Horse Traders', 'Horse Traders')
-add_action_card('Hunting Party', 'Hunting Parties')
-add_action_card('Jester')
-add_action_card('Menagerie')
-add_action_card('Remake')
-add_action_card('Tournament')
-add_action_card('Young Witch', 'Young Witches')
-
-add_action_card('Border Village')
-add_action_card('Cartographer')
-add_action_card('Crossroads', 'Crossroads')
-add_action_card('Develop')
-add_action_card('Duchess', 'Duchesses')
-add_action_card('Embassy', 'Embassies')
-add_action_card('Haggler')
-add_action_card('Highway', 'Highways')
-add_action_card('Inn')
-add_action_card('Jack of All Trades', 'Jacks of All Trades')
-add_action_card('Mandarin')
-add_action_card('Margrave')
-add_action_card('Noble Brigand')
-add_action_card('Nomad Camp')
-add_action_card('Oasis', 'Oases')
-add_action_card('Oracle')
-add_action_card('Scheme')
-add_action_card('Spice Merchant')
-add_action_card('Stables', 'Stables')
-add_action_card('Trader')
-
-# Victory Cards
-add_victory_card('Gardens', 'Gardens')
-add_victory_card('Duke')
-add_victory_card('Vineyard')
-add_victory_card('Fairgrounds', 'Fairgrounds')
-add_victory_card('Farmland')
-add_victory_card('Silk Road')
-
-# Dual Victory Cards
-add_victory_treasure_card('Harem')
-
-add_victory_action_card('Nobles', 'Nobles')
-add_victory_action_card('Great Hall')
-add_victory_action_card('Island')
-add_victory_action_card('Tunnel')
-
-# Treasure Cards
-add_treasure_card('Philosopher\'s Stone')
-add_treasure_card('Contraband')
-add_treasure_card('Bank')
-add_treasure_card('Hoard')
-add_treasure_card('Loan')
 add_treasure_card('Quarry', 'Quarries')
+add_action_card('Rabble', draws=True, attack=True)
 add_treasure_card('Royal Seal')
 add_treasure_card('Talisman')
+add_action_card('Trade Route', buys=True, trash=True)
+add_action_card('Vault', draws=True)
+add_action_card('Venture')
+add_action_card('Watchtower', draws=True)
+add_action_card('Worker\'s Village', actions=True)
+
+# Cornucopia
+add_victory_card('Fairgrounds', 'Fairgrounds')
+add_action_card('Farming Village', actions=True)
+add_action_card('Fortune Teller', attack=True)
+add_action_card('Hamlet', actions=True, buys=True)
+add_action_card('Harvest')
 add_treasure_card('Horn of Plenty', 'Horns of Plenty')
+add_action_card('Horse Traders', 'Horse Traders', buys=True)
+add_action_card('Hunting Party', 'Hunting Parties', draws=True)
+add_action_card('Jester', trash=True, curse=True)
+add_action_card('Menagerie', draws=True)
+add_action_card('Remake', trash=True)
+add_action_card('Tournament') # But at the same time...they aren't common in the supply, so I'll pass here...., actions=True, draws=True, buys=True, attack=True, curse=True) # This is because of the prizes that tournament brings with it. It isn't an attack or anything, but its presence in the supply indicates that these things can appear.
+add_action_card('Young Witch', 'Young Witches', draws=True, attack=True, curse=True)
+# Prize Cards
+add_action_prize_card('Bag of Gold')
+add_treasure_prize_card('Diadem')
+add_action_prize_card('Followers', 'Followers', draws=True, attack=True, curse=True)
+add_action_prize_card('Princess', 'Princesses', buys=True)
+add_action_prize_card('Trusty Steed', draws=True, actions=True)
+
+# Hinterlands
+add_action_card('Border Village', actions=True)
 add_treasure_card('Cache')
+add_action_card('Cartographer')
+add_action_card('Crossroads', 'Crossroads', actions=True, draws=True)
+add_action_card('Develop', trash=True)
+add_action_card('Duchess', 'Duchesses')
+add_action_card('Embassy', 'Embassies', draws=True)
+add_victory_card('Farmland', trash=True)
 add_treasure_card('Fool\'s Gold')
-add_treasure_card('Ill-Gotten Gains', 'Ill-Gotten Gains')
+add_action_card('Haggler')
+add_action_card('Highway', 'Highways')
+add_treasure_card('Ill-Gotten Gains', 'Ill-Gotten Gains', curse=True)
+add_action_card('Inn', actions=True, draws=True)
+add_action_card('Jack of All Trades', 'Jacks of All Trades', draws=True, trash=True)
+add_action_card('Mandarin')
+add_action_card('Margrave', draws=True, buys=True, attack=True)
+add_action_card('Noble Brigand', attack=True)
+add_action_card('Nomad Camp', buys=True)
+add_action_card('Oasis', 'Oases')
+add_action_card('Oracle', draws=True, attack=True)
+add_action_card('Scheme')
+add_victory_card('Silk Road')
+add_action_card('Spice Merchant', draws=True, buys=True)
+add_action_card('Stables', 'Stables', draws=True)
+add_action_card('Trader', trash=True)
+add_victory_action_card('Tunnel')
 
 # Basic Cards
 add_treasure_card('Platinum')
@@ -914,17 +970,10 @@ add_curse_card('Curse')
 
 # Promo Cards (I don't know if Stash is used, but the others are)
 add_treasure_card('Stash', 'Stashes')
-add_action_card('Envoy', 'Envoys')
-add_action_card('Governor')
-add_action_card('Walled Village')
+add_action_card('Envoy', 'Envoys', draws=True)
+add_action_card('Governor', draws=True, trash=True)
+add_action_card('Walled Village', actions=True)
 add_action_card('Black Market')
-
-# Prize Cards
-add_treasure_prize_card('Diadem')
-add_action_prize_card('Bag of Gold')
-add_action_prize_card('Followers', 'Followers')
-add_action_prize_card('Princess', 'Princesses')
-add_action_prize_card('Trusty Steed')
 
 
 # It would seem that isotropic doesn't have Dark Ages cards publicly available, so sadly, these cards
