@@ -2,6 +2,7 @@ from dominion import *
 from isotropic import *
 import sys
 import os
+import time
 from optparse import OptionParser
 import sqlite3
 import re
@@ -25,6 +26,7 @@ class feature_extractor:
         self.features = []
         self.pending_instances = []
         self.files = 0
+        self.ignored_files = 0
         self.instances = 0
         
         self.arff = arff
@@ -218,6 +220,7 @@ class feature_extractor:
         del self.pending_instances[:]
         
     def parse_aborted_handler(self, game, line_num, error):
+        self.ignored_files += 1
         del self.pending_instances[:]
         
 subdir_path = os.path.join('{0:04}', '{1:02}', '{2:02}')
@@ -296,40 +299,47 @@ if __name__ == '__main__':
         print ' -sql: Export to sqlite db'
         print ' -no-arff: Don\'t export an arff file'
         exit(0)
-    
-    # Process ignored files
-    if process_ignored:
-        for dirname, dirnames, filenames in os.walk(ignore_path):
-            for filename in filenames:
-                process_file(dirname, filename)
-    
-    # Process errored files
-    if process_errors:
-        for dirname, dirnames, filenames in os.walk(error_path):
-            for filename in filenames:
-                process_file(dirname, filename)
-    
-    # Process unhandled files
-    if process_unhandled:
-        for dirname, dirnames, filenames in os.walk(unhandled_path):
-            for filename in filenames:
-                process_file(dirname, filename)
-    
-    # Iterate over all files in the log path
-    # http://stackoverflow.com/questions/120656/directory-listing-in-python
-    if process_main:
-        for dirname, dirnames, filenames in os.walk(log_path):
-            for filename in filenames:
-                process_file(dirname, filename)
-            # Don't walk over the other paths, as they are iterated separately.
-            # This assumes that these folders are all subfolders of the main log folder, which should currently be the case.
-            if ignore_path in dirnames:
-                dirnames.remove(ignore_path)
-            if error_path in dirnames:
-                dirnames.remove(error_path)
-            if unhandled_path in dirnames:
-                dirnames.remove(unhandled_path)
-    
+        
+    # Start our overall timer
+    start = time.time()
+    try:
+        
+        # Process ignored files
+        if process_ignored:
+            for dirname, dirnames, filenames in os.walk(ignore_path):
+                for filename in filenames:
+                    process_file(dirname, filename)
+        
+        # Process errored files
+        if process_errors:
+            for dirname, dirnames, filenames in os.walk(error_path):
+                for filename in filenames:
+                    process_file(dirname, filename)
+        
+        # Process unhandled files
+        if process_unhandled:
+            for dirname, dirnames, filenames in os.walk(unhandled_path):
+                for filename in filenames:
+                    process_file(dirname, filename)
+        
+        # Iterate over all files in the log path
+        # http://stackoverflow.com/questions/120656/directory-listing-in-python
+        if process_main:
+            for dirname, dirnames, filenames in os.walk(log_path):
+                for filename in filenames:
+                    process_file(dirname, filename)
+                # Don't walk over the other paths, as they are iterated separately.
+                # This assumes that these folders are all subfolders of the main log folder, which should currently be the case.
+                if ignore_path in dirnames:
+                    dirnames.remove(ignore_path)
+                if error_path in dirnames:
+                    dirnames.remove(error_path)
+                if unhandled_path in dirnames:
+                    dirnames.remove(unhandled_path)
+    except KeyboardInterrupt:
+        print 'Bailing out due to Ctrl-C'
+        
     features.close()
-    print 'Finished building features.'
+    print 'Finished building features. (Took {0} minutes)'.format((time.time() - start) / 60.0)
     print 'Built {0} instances from {1} files.'.format(features.instances, features.files)
+    print 'Ignored {0} files.'.format(features.ignored_files)
