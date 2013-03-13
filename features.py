@@ -3,29 +3,51 @@ from isotropic import *
 import sys
 import os
 from optparse import OptionParser
+import sqlite3
+import re
 
 def pr(s):
     print s.encode('utf-8')
     
-def clean(card):
-    return card.replace("'", "").replace(" ", "_")
+def clean(s):
+    return s.replace("'", "").replace(" ", "_")
+    
+def sqlclean(s):
+    return re.sub(r'[\W]+', '', s.replace(" ", "_").lower())
 
 # This class handles logging features to be trained on
 class feature_extractor:
     
-    def __init__(self, filename):
-        self.file = open(filename, 'w')
-        self.file.write('@RELATION dominion\n\n')
-
+    def __init__(self, filename, arff=True, sql=False):
+        self.dbcon = None
+        self.db = None
+        
         self.features = []
         self.pending_instances = []
         self.files = 0
         self.instances = 0
         
+        self.arff = arff
+        if self.arff:
+            self.file = open(filename, 'w')
+            self.file.write('@RELATION dominion\n\n')
+
         self.init_features()
         
+        self.sql = sql
+        if self.sql:
+            self.init_db()
+        
     def close(self):
-        self.file.close()
+        if self.arff:
+            self.file.close()
+        if self.sql:
+            # Create the indexes
+            sql = "CREATE INDEX card_bought_index ON instances (card_bought);"
+            self.db.execute(sql)
+            
+            self.dbcon.commit()
+            self.dbcon.close()
         
     def init_features(self):
         # Get a sorted list of all cards
@@ -36,7 +58,8 @@ class feature_extractor:
         # Game features
         # Add the cards features
         for card in sorted_supply_cards:
-            self.add_card_in_supply_feature(card)
+            # Python lambda's make this need to be a separate function. That way, card is a new scope.
+            self.add_card_feature(card)
         self.add_feature(lambda game: game.get_num_players(), "Number of Players")
         self.add_feature(lambda game: 1 if game.supply_contains_any(plus_action_cards) else 0, "+Action Cards in Supply?", [0, 1]) # +2 Action or more cards only. Chaining cards (+1 Action) don't count.
         self.add_feature(lambda game: 1 if game.supply_contains_any(plus_buy_cards) else 0, "+Buy Cards in Supply?", [0, 1])
@@ -54,8 +77,9 @@ class feature_extractor:
         # Game state features
         self.add_feature(lambda game: game.get_num_empty_piles(), "Number of Empty Piles")
         # Add features for how many of each victory card are left in the supply (in games where they aren't in the supply, I've set them to instead be however many there would to start if they would be in the supply)
-        for card in victory_cards:
-            self.add_feature(lambda game: game.get_supply_count(card, True), "{0} Left".format(pluralize_card(card)))
+        for card in sorted(victory_cards):
+            # Again, this needs to be in a separate function to make the card get stored in the closure
+            self.add_card_left_feature(card)
         self.add_feature(lambda game: game.get_supply_count('Curse', True), "Curses Left")
         
         # Player deck stats
@@ -66,19 +90,87 @@ class feature_extractor:
         self.add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_ratio(), "Deck Treasure Card Ratio")
         
             
-        # Output features are hard coded in.
-        self.file.write("@ATTRIBUTE 'Card_Bought' {None," + ','.join(map(clean, sorted_supply_cards)) + '}\n')
-        self.file.write("@ATTRIBUTE 'Card_Output_Weight' REAL\n")
-        
-        # Close the features
-        self.file.write('\n@DATA:\n')
+        if self.arff:
+            # Output features are hard coded in.
+            self.file.write("@ATTRIBUTE 'Card_Bought' {None," + ','.join(map(clean, sorted_supply_cards)) + '}\n')
+            self.file.write("@ATTRIBUTE 'Card_Output_Weight' REAL\n")
+            
+            # Close the features
+            self.file.write('\n@DATA:\n')
         
     def add_feature(self, func, name, values = 'REAL'):
-        self.file.write("@ATTRIBUTE '{0}' {1}\n".format(clean(name), values if isinstance(values, basestring) else '{' + ','.join(map(str, values)) + '}'))
-        self.features.append(func)
+        if self.arff:
+            self.file.write("@ATTRIBUTE '{0}' {1}\n".format(clean(name), values if isinstance(values, basestring) else '{' + ','.join(map(str, values)) + '}'))
+        self.features.append((name, func, clean(name), sqlclean(name), values))
         
-    def add_card_in_supply_feature(self, card):
+    def add_card_feature(self, card):
         self.add_feature(lambda game: 1 if game.is_card_in_supply(card) else 0, '{0} in Supply?'.format(card), [0, 1])
+        
+    def add_card_left_feature(self, card):
+        self.add_feature(lambda game: game.get_supply_count(card, True), "{0} Left".format(pluralize_card(card)))
+        
+    def init_db(self):
+        self.dbcon = sqlite3.connect("features.sql3")
+        self.db = self.dbcon.cursor()
+        
+        # Create the table
+        sql = """
+            CREATE TABLE IF NOT EXISTS instances (
+                id INTEGER PRIMARY KEY,
+                {0}
+                card_bought TEXT,
+                card_output_weight REAL
+            );
+        """.format(''.join(self.get_sql_create_columns())) # '\n                '
+        
+        #print sql
+        self.db.execute(sql)
+        
+        # Delete everything from the table
+        sql = "DELETE FROM instances;"
+        self.db.execute(sql)
+        
+        # Shrink the db size back down
+        sql = "VACUUM;"
+        self.db.execute(sql)
+        
+    def get_sql_type(self, values):
+        if isinstance(values, basestring) and (values.lower() == 'real' or values.lower() == 'continuous'):
+            return 'REAL'
+        elif isinstance(values, list) and len(values) > 0:
+            if isinstance(values[0], int):
+                return 'INT'
+            elif isinstance(values[0], str):
+                return 'TEXT'
+        return None
+        
+    def get_sql_create_columns(self):
+        cols = []
+        for name, func, arff, sql, values in self.features:
+            cols.append('{0} {1},'.format(sql, self.get_sql_type(values)))
+        return cols
+        
+    def add_sql_instance(self, instance):
+        sql = """
+            INSERT INTO instances VALUES (
+                NULL,
+                {0}
+            );
+        """.format(''.join(self.get_sql_values(instance))) # '\n                '
+        
+        #print sql
+        self.db.execute(sql)
+        
+    def get_sql_values(self, instance):
+        cols = []
+        for i in range(len(self.features)):
+            if self.features[i][4] == 'TEXT':
+                cols.append("'{0}',".format(instance[i]))
+            else:
+                cols.append('{0},'.format(instance[i]))
+        cols.append("'{0}',".format(instance[-2]))
+        cols.append('{0}'.format(instance[-1]))
+        return cols
         
     def parsing_line_handler(self, game, line_num, line):
         #print 'Parsing line: {0}'.format(line)
@@ -94,7 +186,10 @@ class feature_extractor:
         
     def write_instance(self, game, card):
         # Extract the information from the current game state and log it
-        instance = ','.join([str(feature(game)) for feature in self.features]) + ',{0},{1}'.format(clean(card), game.calc_output_weight(game.possessor)) # Using game.possessor will use either the possessing player, or the current player if there isn't a possessor.
+        instance = [feature(game) for name, feature, arff, sql, values in self.features]
+        instance.append(clean(card))
+        instance.append(game.calc_output_weight(game.possessor)) # Using game.possessor will use either the possessing player, or the current player if there isn't a possessor.
+        #instance = ','.join() + ',{0},{1}'.format(clean(card), game.calc_output_weight(game.possessor))
         self.pending_instances.append(instance)
         
     def unhandled_line_handler(self, game, line_num, line):
@@ -113,9 +208,13 @@ class feature_extractor:
     def parse_complete_handler(self, game):
         self.files += 1
         for instance in self.pending_instances:
-            self.file.write(instance)
-            self.file.write('\n')
             self.instances += 1
+            if self.arff:
+                self.file.write(','.join([str(feature) for feature in instance]) + '\n')
+            if self.sql:
+                self.add_sql_instance(instance)
+                if self.instances % 100 == 0:
+                    self.dbcon.commit()
         del self.pending_instances[:]
         
     def parse_aborted_handler(self, game, line_num, error):
@@ -175,7 +274,7 @@ def process_file(dirname, filename):
     
 if __name__ == '__main__':
     parser = isotropic_parser()
-    features = feature_extractor('features.arff')
+    features = feature_extractor('features.arff', '-no-arff' not in sys.argv, '-sql' in sys.argv)
     parser.register_handler(parsing_line_event, features.parsing_line_handler)
     parser.register_handler(turn_complete_event, features.turn_complete_handler)
     parser.register_handler(unhandled_line_event, features.unhandled_line_handler)
@@ -193,7 +292,9 @@ if __name__ == '__main__':
         print ' -i: Reprocess ignored directory'
         print ' -u: Reprocess unhandled directory'
         print ' -e: Reprocess error directory'
-        print ' -ng: Don\'t process the main directory'
+        print ' -n: Don\'t process the main directory'
+        print ' -sql: Export to sqlite db'
+        print ' -no-arff: Don\'t export an arff file'
         exit(0)
     
     # Process ignored files
