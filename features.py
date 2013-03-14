@@ -194,6 +194,17 @@ class feature_extractor:
         #instance = ','.join() + ',{0},{1}'.format(clean(card), game.calc_output_weight(game.possessor))
         self.pending_instances.append(instance)
         
+    def flush_instances(self):
+        for instance in self.pending_instances:
+            self.instances += 1
+            if self.arff:
+                self.file.write(','.join([str(feature) for feature in instance]) + '\n')
+            if self.sql:
+                self.add_sql_instance(instance)
+                if self.instances % 100 == 0:
+                    self.dbcon.commit()
+        del self.pending_instances[:]
+        
     def unhandled_line_handler(self, game, line_num, line):
         pr(u'{0}: Unhandled line: {1}'.format(line_num, line))
         
@@ -209,15 +220,7 @@ class feature_extractor:
             
     def parse_complete_handler(self, game):
         self.files += 1
-        for instance in self.pending_instances:
-            self.instances += 1
-            if self.arff:
-                self.file.write(','.join([str(feature) for feature in instance]) + '\n')
-            if self.sql:
-                self.add_sql_instance(instance)
-                if self.instances % 100 == 0:
-                    self.dbcon.commit()
-        del self.pending_instances[:]
+        self.flush_instances()
         
     def parse_aborted_handler(self, game, line_num, error):
         self.ignored_files += 1
@@ -309,18 +312,24 @@ if __name__ == '__main__':
             for dirname, dirnames, filenames in os.walk(ignore_path):
                 for filename in filenames:
                     process_file(dirname, filename)
+                # Walk over the directories in reverse order (in case they're nested)
+                dirnames.sort(reverse=True)
         
         # Process errored files
         if process_errors:
             for dirname, dirnames, filenames in os.walk(error_path):
                 for filename in filenames:
                     process_file(dirname, filename)
+                # Walk over the directories in reverse order (in case they're nested)
+                dirnames.sort(reverse=True)
         
         # Process unhandled files
         if process_unhandled:
             for dirname, dirnames, filenames in os.walk(unhandled_path):
                 for filename in filenames:
                     process_file(dirname, filename)
+                # Walk over the directories in reverse order (in case they're nested)
+                dirnames.sort(reverse=True)
         
         # Iterate over all files in the log path
         # http://stackoverflow.com/questions/120656/directory-listing-in-python
@@ -336,8 +345,12 @@ if __name__ == '__main__':
                     dirnames.remove(error_path)
                 if unhandled_path in dirnames:
                     dirnames.remove(unhandled_path)
+                # Walk over the directories in reverse order (this will search 2013 before 2012, 31 before 01, etc. This makes sure it starts the feature extraction with the most recent data.)
+                dirnames.sort(reverse=True)
     except KeyboardInterrupt:
         print 'Bailing out due to Ctrl-C'
+    except Exception, e:
+        print 'Catching {0}'.format(e)
         
     features.close()
     print 'Finished building features. (Took {0} minutes)'.format((time.time() - start) / 60.0)
