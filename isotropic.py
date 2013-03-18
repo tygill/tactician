@@ -711,6 +711,8 @@ add_game_regex(r'(?P<player>.+) gains a <span class=card-none>Pirate Ship</span>
 add_game_regex(r'(?:(?P<player>.+) )?discard(?:ing|s) the hand\.')
 # Matches: ... <player> has n cards in hand.
 add_game_regex(r'(?P<player>.+) has (?P<cards>\d+) cards in hand\.')
+# Matches: ... <player> has nothing in hand.
+add_game_regex(r'(?P<player>.+) has nothing in hand\.')
 
 # Counting House
 # Matches: ... putting <cards> from the discard pile into the hand.
@@ -957,7 +959,7 @@ class isotropic_parser:
                     return
                 place = int(match.group('place'))
                 player = match.group('player')
-                if player.startswith('... '):
+                if player.startswith('... ') or player == 'and and and and':
                     self.abort = illegal_player_name_abort
                     return
                 score = int(match.group('score'))

@@ -52,14 +52,11 @@ class feature_extractor:
             self.dbcon.close()
         
     def init_features(self):
-        # Get a sorted list of all cards
-        sorted_supply_cards = sorted(supply_cards)
-            
         # Add the features
         
         # Game features
         # Add the cards features
-        for card in sorted_supply_cards:
+        for card in sorted(supply_cards):
             # Python lambda's make this need to be a separate function. That way, card is a new scope.
             self.add_card_feature(card)
         self.add_feature(lambda game: game.get_num_players(), "Number of Players")
@@ -77,7 +74,7 @@ class feature_extractor:
         self.add_feature(lambda game: game.actions, "Actions")
         
         # Game state features
-        self.add_feature(lambda game: game.get_num_empty_piles(), "Number of Empty Piles")
+        self.add_feature(lambda game: game.get_num_empty_piles(), "Empty Piles")
         # Add features for how many of each victory card are left in the supply (in games where they aren't in the supply, I've set them to instead be however many there would to start if they would be in the supply)
         for card in sorted(victory_cards):
             # Again, this needs to be in a separate function to make the card get stored in the closure
@@ -86,15 +83,19 @@ class feature_extractor:
         
         # Player deck stats
         # Using game.get_player(game.possessor) gets the stats for the controlling player - either the possessor, or the regular player (as it will be None if there isn't a possessor, in which case the regular player will be retrieved.)
-        self.add_feature(lambda game: game.get_player(game.possessor).get_deck_size(), "Deck Size")
-        self.add_feature(lambda game: game.get_player(game.possessor).get_action_card_ratio(), "Deck Action Card Ratio")
-        self.add_feature(lambda game: game.get_player(game.possessor).get_victory_card_ratio(), "Deck Victory Card Ratio")
-        self.add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_ratio(), "Deck Treasure Card Ratio")
+        self.add_feature(lambda game: game.get_player(game.possessor).get_deck_size(), "Player Deck Size")
+        # Should this ratio be just the number of each of these?
+        self.add_feature(lambda game: game.get_player(game.possessor).get_action_card_ratio(), "Player Deck Action Card Ratio")
+        self.add_feature(lambda game: game.get_player(game.possessor).get_victory_card_ratio(), "Player Deck Victory Card Ratio")
+        self.add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_ratio(), "Player Deck Treasure Card Ratio")
+        # How many of each card are in my deck?
+        #for card in sorted(cards):
+        #    self.add_my_card_feature(card)
         
             
         if self.arff:
             # Output features are hard coded in.
-            self.file.write("@ATTRIBUTE 'Card_Bought' {None," + ','.join(map(clean, sorted_supply_cards)) + '}\n')
+            self.file.write("@ATTRIBUTE 'Card_Bought' {None," + ','.join(map(clean, sorted(supply_cards))) + '}\n')
             self.file.write("@ATTRIBUTE 'Card_Output_Weight' REAL\n")
             
             # Close the features
@@ -110,6 +111,9 @@ class feature_extractor:
         
     def add_card_left_feature(self, card):
         self.add_feature(lambda game: game.get_supply_count(card, True), "{0} Left".format(pluralize_card(card)))
+        
+    def add_my_card_feature(self, card):
+        self.add_feature(lambda game: game.get_player(game.possessor).get_card_count(card), "{0} In Player Deck".format(pluralize_card(card)))
         
     def init_db(self):
         self.dbcon = sqlite3.connect("features.sql3")
@@ -292,7 +296,7 @@ if __name__ == '__main__':
     process_ignored = '-i' in sys.argv
     process_unhandled = '-u' in sys.argv
     process_errors = '-e' in sys.argv
-    process_main = '-ng' not in sys.argv
+    process_main = '-n' not in sys.argv
     if '-h' in sys.argv:
         print 'Command line args:'
         print ' -i: Reprocess ignored directory'
@@ -335,8 +339,10 @@ if __name__ == '__main__':
         # http://stackoverflow.com/questions/120656/directory-listing-in-python
         if process_main:
             for dirname, dirnames, filenames in os.walk(log_path):
-                for filename in filenames:
-                    process_file(dirname, filename)
+                # Filter out everything but a single day
+                if dirname == os.path.join(log_path, '2013', '03', '10'):
+                    for filename in filenames:
+                        process_file(dirname, filename)
                 # Don't walk over the other paths, as they are iterated separately.
                 # This assumes that these folders are all subfolders of the main log folder, which should currently be the case.
                 if ignore_path in dirnames:

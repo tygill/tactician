@@ -116,6 +116,7 @@ class dominion_player:
         # Piles are implemented as a dictionary from card names to how many of them are in the pile
         # Because drawing doesn't tell us exactly what they drew, this will now just hold the deck.
         self.deck = {}
+        self.deck_backup = {}
         #self.discard_pile = {}
         #self.hand = {}
         # Duration cards, actions/money during turn, etc.
@@ -173,7 +174,10 @@ class dominion_player:
         victories = 0.0
         treasures = 0.0
         total = 0.0
+        self.deck_backup.clear()
         for card in self.deck.keys():
+            if self.deck[card] != 0:
+                self.deck_backup[card] = self.deck[card]
             cards = self.deck[card]
             if is_action(card):
                 actions += cards
@@ -186,6 +190,12 @@ class dominion_player:
         self.victory_card_ratio = victories / total if total > 0 else 0
         self.treasure_card_ratio = treasures / total if total > 0 else 0
         self.deck_size = total
+        
+    def get_card_count(self, card):
+        if card in self.deck_backup:
+            return self.deck_backup[card]
+        else:
+            return 0
         
     # Game State Modifiers
     
