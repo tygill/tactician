@@ -44,6 +44,7 @@
     <Compile Include="BackpropagationLayer.cs" />
     <Compile Include="BackpropagationLearner.cs" />
     <Compile Include="BaselineLearner.cs" />
+    <Compile Include="DominionLearner.cs" />
     <Compile Include="IThresholder.cs" />
     <Compile Include="LinearUnit.cs" />
     <Compile Include="Matrix.cs" />

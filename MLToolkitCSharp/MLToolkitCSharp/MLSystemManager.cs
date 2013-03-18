@@ -44,6 +44,10 @@ namespace MLToolkitCSharp
                 return new InstanceBasedLearner();
             }
             */
+            else if (model.Equals("dominion", StringComparison.OrdinalIgnoreCase))
+            {
+                return new DominionLearner(rand);
+            }
             else
             {
                 throw new Exception("Unrecognized model: " + model);
@@ -52,7 +56,7 @@ namespace MLToolkitCSharp
 
         public void run(string[] args)
         {
-            //args = new string[] { "-L", "baseline", "-A", "iris.arff", "-E", "cross", "10", "-N" };
+           // args = new string[] { "-L", "dominion", "-A", "features.arff", "-E", "training"};
 
             // Parse the command line arguments
             ArgParser parser = new ArgParser(args);

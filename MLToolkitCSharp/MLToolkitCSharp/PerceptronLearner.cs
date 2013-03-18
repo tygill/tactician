@@ -103,13 +103,13 @@ namespace MLToolkitCSharp
                     misclassificationPlot.addDataPoint(epochCount, 1 - accuracy);
             }
             Console.WriteLine("Training took " + epochCount + " epochs.");
-            for (int j = 0; j < m_perceptrons.Length; ++j)
+            /*for (int j = 0; j < m_perceptrons.Length; ++j)
             {
                 Console.WriteLine("\nFinal Weights (Perceptron " + j + "):");
                 for (int i = 0; i < features.cols(); ++i)
                     Console.WriteLine("\t" + features.attrName(i) + ": " + m_perceptrons[j].Weights[i]);
                 Console.WriteLine("\tBias Weight: " + m_perceptrons[j].Weights[features.cols()]);
-            }
+            }*/
 
             /*
             if (m_outFile != null)
