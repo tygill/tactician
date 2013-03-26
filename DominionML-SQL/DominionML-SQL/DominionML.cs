@@ -14,8 +14,15 @@ namespace DominionML_SQL
         {
             // Parse command line arguments
             List<string> argList = args.ToList<string>();
-            string file = args.Contains("-f") ? args[argList.IndexOf("-F") + 1] : "test.db3";
-            bool rerandomize = args.Contains("-r");
+            string file = args.Contains("-f") ? args[argList.IndexOf("-f") + 1] : "test.db3";
+            bool rerandomize = args.Contains("-r") || args.Contains("-t") || args.Contains("-v");
+            double trainingPercent = args.Contains("-t") ? double.Parse(args[argList.IndexOf("-t") + 1]) : 0.7;
+            double validationPercent = args.Contains("-v") ? double.Parse(args[argList.IndexOf("-v") + 1]) : 0.3;
+            Console.WriteLine("Parameters: <> means argument, = means default value");
+            Console.WriteLine(" -f <file=test.db3>    Use database file");
+            Console.WriteLine(" -r                    Rerandomize (reset the randomizer and use fields)");
+            Console.WriteLine(" -t <train %=0.7>      Approximate percentage of data to use for training (implies -r)");
+            Console.WriteLine(" -v <validate %=0.3>   Approximate percentage of training data that should be used for validation (implies -r)");
 
             using (SQLiteConnection conn = new SQLiteConnection(string.Format("Data Source={0};Version=3;", file)))
             {
@@ -45,11 +52,6 @@ namespace DominionML_SQL
                     {
                         command.ExecuteNonQuery();
                     }
-                    sql = "CREATE INDEX IF NOT EXISTS `use_index` ON `instances` (`use`);";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        command.ExecuteNonQuery();
-                    }
                     rerandomize = true;
                     columns.Add("use");
                 }
@@ -58,7 +60,7 @@ namespace DominionML_SQL
                 // Normalization data
                 double min = -1.0; // hand picked for now...
                 double max = 1.0;
-                /*
+                //*
                 {
                     string sql = "SELECT MAX(`card_output_weight`) FROM `instances`;";
                     using (SQLiteCommand command = new SQLiteCommand(sql, conn))
@@ -116,7 +118,7 @@ namespace DominionML_SQL
                 ///*
                 if (rerandomize)
                 {
-                    Console.Write("Rerandomizing training, validation, and testing sets...");
+                    Console.Write("Rerandomizing training, validation, and testing sets (this will take a while)");
                     string sql = "PRAGMA journal_mode = OFF;";
                     using (SQLiteCommand command = new SQLiteCommand(sql, conn))
                     {
@@ -128,15 +130,28 @@ namespace DominionML_SQL
                     {
                         command.ExecuteNonQuery();
                     }
+                    Console.Write(" .");
+                    sql = "DROP INDEX IF EXISTS `use_index`;";
+                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                    {
+                        command.ExecuteNonQuery();
+                    }
                     // [ training | test ]
                     // [ [ validation | training ] | test ]
                     sql = "UPDATE `instances` SET `use` = (CASE WHEN `randomizer` < (@trainingPercent * @validationPercent) * 100 THEN 'validation' WHEN `randomizer` < @trainingPercent * 100 THEN 'training' ELSE 'test' END);";
                     using (SQLiteCommand command = new SQLiteCommand(sql, conn))
                     {
-                        command.Parameters.AddWithValue("@trainingPercent", 0.7);
-                        command.Parameters.AddWithValue("@validationPercent", 0.3);
+                        command.Parameters.AddWithValue("@trainingPercent", trainingPercent);
+                        command.Parameters.AddWithValue("@validationPercent", validationPercent);
                         command.ExecuteNonQuery();
                     }
+                    Console.Write(".");
+                    sql = "CREATE INDEX IF NOT EXISTS `use_index` ON `instances` (`use`);";
+                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                    {
+                        command.ExecuteNonQuery();
+                    }
+                    Console.Write(".");
                     sql = "PRAGMA journal_mode = ON;";
                     using (SQLiteCommand command = new SQLiteCommand(sql, conn))
                     {

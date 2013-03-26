@@ -187,8 +187,8 @@ class feature_extractor:
             else:
                 cols.append('{0},'.format(instance[i]))
         cols.append("'{0}',".format(instance[-4]))
-        cols.append('{0}'.format(instance[-3]))
-        cols.append('{0}'.format(instance[-2]))
+        cols.append('{0},'.format(instance[-3]))
+        cols.append('{0},'.format(instance[-2]))
         cols.append('{0}'.format(instance[-1]))
         return cols
         
