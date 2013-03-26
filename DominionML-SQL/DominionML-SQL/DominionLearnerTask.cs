@@ -35,18 +35,34 @@ namespace DominionML_SQL
 
             // Get the total number of instances we have available
             int totalInstances = 0;
+            int trainingInstances = 0;
+            int validationInstances = 0;
+            int testingInstances = 0;
             sql = @"SELECT COUNT(*) FROM `instances` WHERE `card_bought` = @card_bought";
             using (SQLiteCommand command = new SQLiteCommand(sql, Connection))
             {
                 command.Parameters.AddWithValue("@card_bought", Card);
-                totalInstances = Convert.ToInt32((Int64)command.ExecuteScalar());
-                Console.WriteLine("{0}: {1} Instances", Card, totalInstances);
+                totalInstances = Convert.ToInt32(command.ExecuteScalar());
             }
-
-            // Decide how many instances to use for training, validation, and testing
-            //int trainingInstances = (int)(TrainingSetPercent * totalInstances);
-            //int validationInstances = (int)(ValidationSetPercent * trainingInstances);
-            //int testingInstances = totalInstances - trainingInstances - validationInstances;
+            sql = @"SELECT COUNT(*) FROM `instances` WHERE `card_bought` = @card_bought AND `use` = 'training'";
+            using (SQLiteCommand command = new SQLiteCommand(sql, Connection))
+            {
+                command.Parameters.AddWithValue("@card_bought", Card);
+                trainingInstances = Convert.ToInt32(command.ExecuteScalar());
+            }
+            sql = @"SELECT COUNT(*) FROM `instances` WHERE `card_bought` = @card_bought AND `use` = 'validation'";
+            using (SQLiteCommand command = new SQLiteCommand(sql, Connection))
+            {
+                command.Parameters.AddWithValue("@card_bought", Card);
+                validationInstances = Convert.ToInt32(command.ExecuteScalar());
+            }
+            sql = @"SELECT COUNT(*) FROM `instances` WHERE `card_bought` = @card_bought AND `use` = 'testing'";
+            using (SQLiteCommand command = new SQLiteCommand(sql, Connection))
+            {
+                command.Parameters.AddWithValue("@card_bought", Card);
+                testingInstances = Convert.ToInt32(command.ExecuteScalar());
+            }
+            Console.WriteLine("{0}: {1} Instances ({2} training, {3} validation, {4} testing)", Card, totalInstances, trainingInstances, validationInstances, testingInstances);
 
             // Epoch status
             int epochSize = 500;// Math.Min(validationInstances, 500);
@@ -66,10 +82,14 @@ namespace DominionML_SQL
             // Train the learner
             bool allTrained = false;
             bool done = false;
-            sql = string.Format(@"SELECT `{0}`, `card_output_weight` FROM `instances` WHERE `card_bought` = @card_bought AND `use` = @use ORDER BY RANDOM();", string.Join("`, `", Features));
+            sql = string.Format(@"SELECT `{0}`, `player_final_score` FROM `instances` WHERE `card_bought` = @card_bought AND `use` = @use ORDER BY RANDOM();", string.Join("`, `", Features));
             SQLiteDataReader trainingReader = SQLReader(sql, "training"); // Bootstrap this
+            Stopwatch epochWatch = new Stopwatch();
             while (!(done && allTrained))
             {
+                epochWatch.Restart();
+
+                // Don't train on the first epoch
                 if (epochsTrained != 0)
                 {
                     for (int e = 0; e < epochSize; e++)
@@ -83,6 +103,7 @@ namespace DominionML_SQL
                             trainingReader = SQLReader(sql, "training");
                         }
 
+                        // Read each feature from our database result
                         for (int i = 0; i < Features.Count; i++)
                         {
                             instance[i] = trainingReader.GetDouble(i);
@@ -93,10 +114,10 @@ namespace DominionML_SQL
                 }
 
                 // Test the predictive accuracy on the entire validation set
-                // Reuse the same sql currently...
-                List<double> targets = new List<double>(totalInstances);
-                List<double> errors = new List<double>(totalInstances);
+                //List<double> targets = new List<double>(validationInstances);
+                //List<double> errors = new List<double>(validationInstances);
                 double sse = 0.0;
+                // Reuse the same sql currently...
                 SQLForEach(sql, "validation", reader =>
                 {
                     for (int i = 0; i < Features.Count; i++)
@@ -105,13 +126,14 @@ namespace DominionML_SQL
                     }
                     // The target output is the last column in the row
                     double prediction = Learner.Predict(instance);
-                    double error = Normalize(reader.GetDouble(Features.Count)) - prediction;
+                    double target = Normalize(reader.GetDouble(Features.Count));
+                    double error = target - prediction;
                     sse += error * error;
-                    targets.Add(Normalize(reader.GetDouble(Features.Count)));
-                    errors.Add(error);
+                    //targets.Add(target);
+                    //errors.Add(error);
                     //Console.WriteLine("Prediction: {0} {1} {2}", Math.Round(prediction, 3), Math.Round(Normalize(reader.GetDouble(Features.Count)), 3), Math.Round(error, 3));
                 });
-                double mse = sse / totalInstances;
+                double mse = sse / validationInstances;
 
                 currentErrorWindow.Enqueue(mse);
                 if (currentErrorWindow.Count > terminationWindowSize)
@@ -132,7 +154,10 @@ namespace DominionML_SQL
                     done = true;
                 }
 
-                Console.WriteLine("{0}:{6} Training Accuracy:\n    SSE: {7}\n    MSE: {1}\n   RMSE: {2}\n AvgErr: {3}\n StdDev: {4}\n AvgTgt: {5}", Card, mse, Math.Sqrt(mse), errors.Average(), errors.StdDev(), targets.Average(), epochsTrained, errors.Select(x => x * x).Sum());
+                epochWatch.Stop();
+
+                Console.WriteLine("{0}:{1} Training Accuracy (Epoch took {2:00}:{3:00}):\n    SSE: {4}\n    MSE: {5}", Card, epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds, sse, mse);
+                //Console.WriteLine("{0}:{6} Training Accuracy:\n    SSE: {7}\n    MSE: {1}\n   RMSE: {2}\n AvgErr: {3}\n StdDev: {4}\n AvgTgt: {5}", Card, mse, Math.Sqrt(mse), errors.Average(), errors.StdDev(), targets.Average(), epochsTrained, errors.Select(x => x * x).Sum());
 
                 epochsTrained++;
             }

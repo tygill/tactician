@@ -22,7 +22,7 @@ namespace DominionML_SQL
             Console.WriteLine(" -f <file=test.db3>    Use database file");
             Console.WriteLine(" -r                    Rerandomize (reset the randomizer and use fields)");
             Console.WriteLine(" -t <train %=0.7>      Approximate percentage of data to use for training (implies -r)");
-            Console.WriteLine(" -v <validate %=0.3>   Approximate percentage of training data that should be used for validation (implies -r)");
+            Console.WriteLine(" -v <validate %=0.3>   Approximate percentage of training data to use for validation (implies -r)");
 
             using (SQLiteConnection conn = new SQLiteConnection(string.Format("Data Source={0};Version=3;", file)))
             {
@@ -41,6 +41,7 @@ namespace DominionML_SQL
                     {
                         command.ExecuteNonQuery();
                     }
+                    rerandomize = true;
                     columns.Add("randomizer");
                 }
 
@@ -58,16 +59,49 @@ namespace DominionML_SQL
                 //*/
 
                 // Normalization data
-                double min = -1.0; // hand picked for now...
-                double max = 1.0;
                 //*
+                double average = 0.0;
+                double stddev = 0.0;
+                double median = 0.0;
                 {
-                    string sql = "SELECT MAX(`card_output_weight`) FROM `instances`;";
+                    string sql = "SELECT `player_final_score` FROM `instances` ORDER BY `player_final_score`";
+                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                    {
+                        using (SQLiteDataReader reader = command.ExecuteReader())
+                        {
+                            List<double> scores = new List<double>();
+                            while (reader.Read())
+                            {
+                                scores.Add(reader.GetDouble(0));
+                            }
+                            average = scores.Average();
+                            stddev = scores.StdDev();
+                            median = scores[scores.Count / 2];
+                        }
+                    }
+                }
+                //*/
+                double min = average - 2 * stddev; // This should catch about 95% of all games within this normalization region, assuming this does indeed have a mostly normal distribution.
+                double max = average + 2 * stddev;
+
+                Console.WriteLine("Average: {0}", average);
+                Console.WriteLine("Std Dev: {0}", stddev);
+                Console.WriteLine("Min:     {0}", min);
+                Console.WriteLine("Max:     {0}", max);
+
+                // Old code for extracting averages and standard deviations and such...
+                //double min = 0.0;
+                //double max = 1.0;
+                /*
+                {
+                    //string sql = "SELECT MAX(`card_output_weight`) FROM `instances`;";
+                    string sql = "SELECT MAX(`player_final_score`) FROM `instances`;";
                     using (SQLiteCommand command = new SQLiteCommand(sql, conn))
                     {
                         max = Convert.ToDouble(command.ExecuteScalar());
                     }
-                    sql = "SELECT MIN(`card_output_weight`) FROM `instances`;";
+                    //sql = "SELECT MIN(`card_output_weight`) FROM `instances`;";
+                    sql = "SELECT MIN(`player_final_score`) FROM `instances`;";
                     using (SQLiteCommand command = new SQLiteCommand(sql, conn))
                     {
                         min = Convert.ToDouble(command.ExecuteScalar());
@@ -76,25 +110,6 @@ namespace DominionML_SQL
                 //*/
 
                 /*
-                {
-                    string sql = "SELECT `card_output_weight` FROM `instances` ORDER BY `card_output_weight`";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        using (SQLiteDataReader reader = command.ExecuteReader())
-                        {
-                            while (reader.Read())
-                            {
-                                Console.WriteLine(reader.GetDouble(0));
-                            }
-                        }
-                    }
-                    System.Environment.Exit(0);
-                }
-                //*/
-
-                /*
-                double average = 0.0;
-                double stddev = 0.0;
                 {
                     string sql = "SELECT AVG(`card_output_weight`) FROM `instances`;";
                     using (SQLiteCommand command = new SQLiteCommand(sql, conn))
@@ -107,18 +122,12 @@ namespace DominionML_SQL
                         stddev = Math.Sqrt(Convert.ToDouble(command.ExecuteScalar()));
                     }
                 }
-                Console.WriteLine("Average: {0}", average);
-                Console.WriteLine("Std Dev: {0}", stddev);
-                min = average - 3 * stddev;
-                max = average + 3 * stddev;
                 //*/
-                Console.WriteLine("Min: {0}", min);
-                Console.WriteLine("Max: {0}", max);
 
                 ///*
                 if (rerandomize)
                 {
-                    Console.Write("Rerandomizing training, validation, and testing sets (this will take a while)");
+                    Console.WriteLine("Rerandomizing training, validation, and testing sets (this will take a while)");
                     string sql = "PRAGMA journal_mode = OFF;";
                     using (SQLiteCommand command = new SQLiteCommand(sql, conn))
                     {
@@ -138,7 +147,7 @@ namespace DominionML_SQL
                     }
                     // [ training | test ]
                     // [ [ validation | training ] | test ]
-                    sql = "UPDATE `instances` SET `use` = (CASE WHEN `randomizer` < (@trainingPercent * @validationPercent) * 100 THEN 'validation' WHEN `randomizer` < @trainingPercent * 100 THEN 'training' ELSE 'test' END);";
+                    sql = "UPDATE `instances` SET `use` = (CASE WHEN `randomizer` < (@trainingPercent * @validationPercent) * 100 THEN 'validation' WHEN `randomizer` < @trainingPercent * 100 THEN 'training' ELSE 'testing' END);";
                     using (SQLiteCommand command = new SQLiteCommand(sql, conn))
                     {
                         command.Parameters.AddWithValue("@trainingPercent", trainingPercent);
@@ -191,25 +200,11 @@ namespace DominionML_SQL
                 }
 
                 Console.ReadLine();
-
-                /*
-                string sql = string.Format(@"SELECT `{0}` FROM `instances` WHERE `card_bought` = @card_bought ORDER BY RANDOM()", string.Join("`, `", features));
-                //Console.WriteLine("SQL: {0}", sql);
-
-                using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                {
-                    command.Parameters.AddWithValue("@card_bought", "Alchemist");
-                    //Console.WriteLine(" SQL: {0}", command.);
-                    SQLiteDataReader reader = command.ExecuteReader();
-                    while (reader.Read())
-                    {
-                        Console.WriteLine(" Row: ALchemist: {0}", reader["alchemist_in_supply"]);
-                    }
-                }
-                 */
             }
         }
 
+        // These are the hard coded, known non-feature column names.
+        // If other features should be excluded, they can be added to this list.
         private static string[] nonFeatureColumns = { "id", "card_bought", "card_output_weight", "player_final_score", "average_final_score", "randomizer", "use" };
         public static bool IsFeatureColumn(string column)
         {

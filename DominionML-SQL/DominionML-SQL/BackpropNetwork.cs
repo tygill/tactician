@@ -32,7 +32,7 @@ namespace DominionML_SQL
         private List<List<HiddenNode>> hiddenNodes;
         private List<OutputNode> outputNodes;
 
-        public BackpropNetwork(double learningRate = 0.1, double speedUp = 0.0, double maxInitialWeight = 0.5)
+        public BackpropNetwork(double learningRate = 0.1, double speedUp = 0.0, double maxInitialWeight = 0.1)
         {
             LearningRate = learningRate;
             SpeedUp = speedUp;
