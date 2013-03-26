@@ -1,0 +1,20 @@
+BackpropNetwork Serialization
+
+{'inputs':
+    [{'id' : 0,
+    'weights' :
+        {<id> : <weight>,
+        ...}},
+    ...]
+'hidden':
+    [{'id' : 0,
+        'weights' :
+        {<id> : <weight>,
+        ...}},
+    ...]
+'output':
+    [{'id' : 0,
+        'weights' :
+        {<id> : <weight>,
+        ...}},
+    ...]}

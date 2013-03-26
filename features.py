@@ -45,7 +45,9 @@ class feature_extractor:
             self.file.close()
         if self.sql:
             # Create the indexes
-            sql = "CREATE INDEX card_bought_index ON instances (card_bought);"
+            sql = "CREATE INDEX IF NOT EXISTS card_bought_index ON instances (card_bought);"
+            self.db.execute(sql)
+            sql = "CREATE INDEX IF NOT EXISTS use_index ON instances (use);"
             self.db.execute(sql)
             
             self.dbcon.commit()
@@ -84,19 +86,23 @@ class feature_extractor:
         # Player deck stats
         # Using game.get_player(game.possessor) gets the stats for the controlling player - either the possessor, or the regular player (as it will be None if there isn't a possessor, in which case the regular player will be retrieved.)
         self.add_feature(lambda game: game.get_player(game.possessor).get_deck_size(), "Player Deck Size")
-        # Should this ratio be just the number of each of these?
-        self.add_feature(lambda game: game.get_player(game.possessor).get_action_card_ratio(), "Player Deck Action Card Ratio")
-        self.add_feature(lambda game: game.get_player(game.possessor).get_victory_card_ratio(), "Player Deck Victory Card Ratio")
-        self.add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_ratio(), "Player Deck Treasure Card Ratio")
+        self.add_feature(lambda game: game.get_player(game.possessor).get_action_card_count(), "Player Deck Action Cards")
+        self.add_feature(lambda game: game.get_player(game.possessor).get_victory_card_count(), "Player Deck Victory Cards")
+        self.add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_count(), "Player Deck Treasure Cards")
+        self.add_feature(lambda game: game.get_player(game.possessor).get_action_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Action Card Ratio")
+        self.add_feature(lambda game: game.get_player(game.possessor).get_victory_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Victory Card Ratio")
+        self.add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Treasure Card Ratio")
         # How many of each card are in my deck?
-        #for card in sorted(cards):
-        #    self.add_my_card_feature(card)
+        for card in sorted(cards):
+            self.add_my_card_feature(card)
         
             
         if self.arff:
             # Output features are hard coded in.
             self.file.write("@ATTRIBUTE 'Card_Bought' {None," + ','.join(map(clean, sorted(supply_cards))) + '}\n')
             self.file.write("@ATTRIBUTE 'Card_Output_Weight' REAL\n")
+            self.file.write("@ATTRIBUTE 'Player_Final_Score' REAL\n")
+            self.file.write("@ATTRIBUTE 'Average_Final_Score' REAL\n")
             
             # Close the features
             self.file.write('\n@DATA:\n')
@@ -119,21 +125,25 @@ class feature_extractor:
         self.dbcon = sqlite3.connect("features.sql3")
         self.db = self.dbcon.cursor()
         
+        # Drop the table if it was already there
+        sql = "DROP TABLE IF EXISTS instances;"
+        self.db.execute(sql)
+        
         # Create the table
         sql = """
             CREATE TABLE IF NOT EXISTS instances (
                 id INTEGER PRIMARY KEY,
                 {0}
                 card_bought TEXT,
-                card_output_weight REAL
+                card_output_weight REAL,
+                player_final_score REAL,
+                average_final_score REAL,
+                use TEXT DEFAULT NULL,
+                randomizer INT
             );
         """.format(''.join(self.get_sql_create_columns())) # '\n                '
         
         #print sql
-        self.db.execute(sql)
-        
-        # Delete everything from the table
-        sql = "DELETE FROM instances;"
         self.db.execute(sql)
         
         # Shrink the db size back down
@@ -160,7 +170,9 @@ class feature_extractor:
         sql = """
             INSERT INTO instances VALUES (
                 NULL,
-                {0}
+                {0},
+                NULL,
+                NULL
             );
         """.format(''.join(self.get_sql_values(instance))) # '\n                '
         
@@ -174,7 +186,9 @@ class feature_extractor:
                 cols.append("'{0}',".format(instance[i]))
             else:
                 cols.append('{0},'.format(instance[i]))
-        cols.append("'{0}',".format(instance[-2]))
+        cols.append("'{0}',".format(instance[-4]))
+        cols.append('{0}'.format(instance[-3]))
+        cols.append('{0}'.format(instance[-2]))
         cols.append('{0}'.format(instance[-1]))
         return cols
         
@@ -195,6 +209,8 @@ class feature_extractor:
         instance = [feature(game) for name, feature, arff, sql, values in self.features]
         instance.append(clean(card))
         instance.append(game.calc_output_weight(game.possessor)) # Using game.possessor will use either the possessing player, or the current player if there isn't a possessor.
+        instance.append(game.get_player(game.possessor).get_final_score())
+        instance.append(game.get_average_final_score())
         #instance = ','.join() + ',{0},{1}'.format(clean(card), game.calc_output_weight(game.possessor))
         self.pending_instances.append(instance)
         
@@ -205,8 +221,8 @@ class feature_extractor:
                 self.file.write(','.join([str(feature) for feature in instance]) + '\n')
             if self.sql:
                 self.add_sql_instance(instance)
-                if self.instances % 100 == 0:
-                    self.dbcon.commit()
+                #if self.instances % 100 == 0:
+                #    self.dbcon.commit()
         del self.pending_instances[:]
         
     def unhandled_line_handler(self, game, line_num, line):
@@ -232,9 +248,12 @@ class feature_extractor:
         
 subdir_path = os.path.join('{0:04}', '{1:02}', '{2:02}')
 log_path = 'games'
-ignore_path = os.path.join(log_path, 'ignored')
-error_path = os.path.join(log_path, 'error')
-unhandled_path = os.path.join(log_path, 'unhandled')
+ignore_folder = 'ignored'
+ignore_path = os.path.join(log_path, ignore_folder)
+error_folder = 'error'
+error_path = os.path.join(log_path, error_folder)
+unhandled_folder = 'unhandled'
+unhandled_path = os.path.join(log_path, unhandled_folder)
 if not os.path.exists(ignore_path):
     os.makedirs(ignore_path)
 if not os.path.exists(error_path):
@@ -254,7 +273,7 @@ def rename(filename, src, dest):
         except OSError:
             # The file must have already existed, so try to delete the old file and replace it
             if os.path.exists(new):
-                os.remote(new)
+                os.remove(new)
             # Now try again
             os.rename(old, new)
     
@@ -340,17 +359,17 @@ if __name__ == '__main__':
         if process_main:
             for dirname, dirnames, filenames in os.walk(log_path):
                 # Filter out everything but a single day
-                if dirname == os.path.join(log_path, '2013', '03', '10'):
-                    for filename in filenames:
-                        process_file(dirname, filename)
+                #if dirname == os.path.join(log_path, '2013', '03', '10'):
+                for filename in filenames:
+                    process_file(dirname, filename)
                 # Don't walk over the other paths, as they are iterated separately.
                 # This assumes that these folders are all subfolders of the main log folder, which should currently be the case.
-                if ignore_path in dirnames:
-                    dirnames.remove(ignore_path)
-                if error_path in dirnames:
-                    dirnames.remove(error_path)
-                if unhandled_path in dirnames:
-                    dirnames.remove(unhandled_path)
+                if ignore_folder in dirnames:
+                    dirnames.remove(ignore_folder)
+                if error_folder in dirnames:
+                    dirnames.remove(error_folder)
+                if unhandled_folder in dirnames:
+                    dirnames.remove(unhandled_folder)
                 # Walk over the directories in reverse order (this will search 2013 before 2012, 31 before 01, etc. This makes sure it starts the feature extraction with the most recent data.)
                 dirnames.sort(reverse=True)
     except KeyboardInterrupt:

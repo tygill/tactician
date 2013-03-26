@@ -809,6 +809,8 @@ tie_abort = -4
 invalid_end_state_abort = -5
 illegal_player_name_abort = -6
 incomplete_file_abort = -7
+duplicate_player_name_abort = -8
+unhandled_line_abort = -9
 
 # Most recent assertion that failed
 assertion_exception = None
@@ -830,6 +832,10 @@ def abort_string(abort):
         return "Illegal Player Name{0}".format(": '{0}'".format(illegal_player_name) if illegal_player_name else "")
     elif abort == incomplete_file_abort:
         return "Incomplete File (didn't finish extracting, most likely."
+    elif abort == duplicate_player_name_abort:
+        return "Duplicate player name{0}".format(": '{0}'".format(illegal_player_name) if illegal_player_name else "")
+    elif abort == unhandled_line_abort:
+        return "Unhandled line"
     else:
         return "Unknown Reason"
 
@@ -959,12 +965,19 @@ class isotropic_parser:
                     return
                 place = int(match.group('place'))
                 player = match.group('player')
+                global illegal_player_name
                 if player.startswith('... ') or player == 'and and and and':
+                    illegal_player_name = player
                     self.abort = illegal_player_name_abort
                     return
                 score = int(match.group('score'))
                 turns = int(match.group('turns'))
                 cards = match.group('cards')
+                if (player in self.players):
+                    # This is a duplicate player name
+                    illegal_player_name = player
+                    self.abort = duplicate_player_name_abort
+                    return
                 # Cache the player locally for regex validation
                 self.players.append(player)
                 #foreach_cards(cards, lambda count, card: pr('  {0} {1} ({2})'.format(count, card, sanitize_card(card))))
@@ -1181,6 +1194,8 @@ class isotropic_parser:
         else:
             self.handle_event(unexpected_line_event, self.line_num, line, regex.pattern)
             #print 'Line didn\'t match:\n Line: {0}\n Pattern: {1}'.format(line, regex.pattern)
+        self.abort = unhandled_line_abort
+        return
             
     def assert_current_player(self, player):
         assert self.game.get_player(player) is self.game.get_player(), "Acting player was not expected!"

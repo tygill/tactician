@@ -91,10 +91,10 @@ if __name__ == '__main__':
                 new_path = os.path.join(dir, file)
                 os.rename(old_path, new_path)
     
-    start_date = datetime.date(2013, 1, 1)
-    end_date = datetime.date.today()
+    start_date = datetime.date(2013, 3, 1)
+    end_date = datetime.date(2013, 3, 15) # This was the last day of isotropic....a sad day indeed.
     time_delta = datetime.timedelta(days=-1)
-    cur_date = end_date + time_delta
+    cur_date = end_date
     while start_date <= cur_date:
         url = cur_date.strftime('http://dominion.isotropic.org/gamelog/%Y%m/%d/all.tar.bz2')
         filename = cur_date.strftime('{0}\%Y-%m-%d.tar.bz2'.format(download_dir))

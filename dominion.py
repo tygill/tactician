@@ -128,9 +128,9 @@ class dominion_player:
         self.pirate_ship_tokens = 0
         
         self.output_weight = None
-        self.action_card_ratio = 0
-        self.victory_card_ratio = 0
-        self.treasure_card_ratio = 0
+        self.action_card_count = 0
+        self.victory_card_count = 0
+        self.treasure_card_count = 0
         self.deck_size = 0
         
     def set_final_score(self, score):
@@ -157,39 +157,35 @@ class dominion_player:
     def get_output_weight(self):
         return self.output_weight
         
-    def get_action_card_ratio(self):
-        return self.action_card_ratio
+    def get_action_card_count(self):
+        return self.action_card_count
         
-    def get_victory_card_ratio(self):
-        return self.victory_card_ratio
+    def get_victory_card_count(self):
+        return self.victory_card_count
         
-    def get_treasure_card_ratio(self):
-        return self.treasure_card_ratio
+    def get_treasure_card_count(self):
+        return self.treasure_card_count
         
     def get_deck_size(self):
         return self.deck_size
         
     def update_properties(self):
-        actions = 0.0
-        victories = 0.0
-        treasures = 0.0
-        total = 0.0
+        self.action_card_count = 0.0
+        self.victory_card_count = 0.0
+        self.treasure_card_count = 0.0
+        self.deck_size = 0.0
         self.deck_backup.clear()
         for card in self.deck.keys():
             if self.deck[card] != 0:
                 self.deck_backup[card] = self.deck[card]
             cards = self.deck[card]
             if is_action(card):
-                actions += cards
+                self.action_card_count += cards
             if is_victory(card):
-                victories += cards
+                self.victory_card_count += cards
             if is_treasure(card):
-                treasures += cards
-            total += cards
-        self.action_card_ratio = actions / total if total > 0 else 0
-        self.victory_card_ratio = victories / total if total > 0 else 0
-        self.treasure_card_ratio = treasures / total if total > 0 else 0
-        self.deck_size = total
+                self.treasure_card_count += cards
+            self.deck_size += cards
         
     def get_card_count(self, card):
         if card in self.deck_backup:
@@ -311,6 +307,13 @@ class dominion_game:
         assert_card(card)
         incr_value(self.final_trash, card)
         
+    def get_average_final_score(self):
+        total = 0.0
+        for p in self.players.values():
+            total += p.get_final_score()
+        average = total / self.num_players
+        return average
+        
     # This calculates the score ratio for each player for the game
     def calc_output_weight(self, player = None):
         player = self.get_player(player)
@@ -321,7 +324,8 @@ class dominion_game:
             for p in self.players.values():
                 total += p.get_final_score()
             average = total / self.num_players
-            weight = (player.get_final_score() - average) / (average if average != 0 else 1)
+            difference = (player.get_final_score() - average)
+            weight = (1 if difference >= 0 else -1) * (difference * difference) / (average if average != 0 else 1)
             player.set_output_weight(weight)
             return weight
             
@@ -413,7 +417,7 @@ class dominion_game:
         if turn_number is not None:
             self.turn_number = turn_number
             
-        # Update the ratios in the current players deck
+        # Update the counts in the current players deck
         self.get_player().update_properties()
         if self.possessor:
             self.get_player(self.possessor).update_properties()
