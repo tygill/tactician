@@ -24,12 +24,21 @@ namespace DominionML_SQL
             Console.WriteLine(" -t <train %=0.7>      Approximate percentage of data to use for training (implies -r)");
             Console.WriteLine(" -v <validate %=0.3>   Approximate percentage of training data to use for validation (implies -r)");
 
+            // Get the global properties from the database before starting all the subtasks.
+            // Each subtask will initiate its own memory database.
+            IList<string> columns;
+            IEnumerable<string> features;
+            IList<string> cards;
+            double average = 0.0;
+            double stddev = 0.0;
+            double min = 0.0;
+            double max = 0.0;
             using (SQLiteConnection conn = new SQLiteConnection(string.Format("Data Source={0};Version=3;", file)))
             {
                 conn.Open();
 
                 // Get the list of features from the table column names
-                IList<string> columns = conn.GetTableColumns("instances");
+                columns = conn.GetTableColumns("instances");
 
                 // Hack in the ALTER TABLE to add the randomizer and use columns (used to divide into validation sets and such)
                 ///*
@@ -59,9 +68,7 @@ namespace DominionML_SQL
                 //*/
 
                 // Normalization data
-                //*
-                double average = 0.0;
-                double stddev = 0.0;
+                /*
                 double median = 0.0;
                 {
                     string sql = "SELECT `player_final_score` FROM `instances` ORDER BY `player_final_score`";
@@ -81,8 +88,29 @@ namespace DominionML_SQL
                     }
                 }
                 //*/
-                double min = average - 2 * stddev; // This should catch about 95% of all games within this normalization region, assuming this does indeed have a mostly normal distribution.
-                double max = average + 2 * stddev;
+                //*
+                if (false)
+                {
+                    string sql = "SELECT AVG(`player_final_score`) FROM `instances`;";
+                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                    {
+                        average = Convert.ToDouble(command.ExecuteScalar());
+                    }
+                    sql = "SELECT AVG((`instances`.`player_final_score` - `sub`.`a`)*(`instances`.`player_final_score` - `sub`.`a`)) AS `var` FROM `instances`, (SELECT AVG(`player_final_score`) AS `a` FROM `instances`) AS `sub`;";
+                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                    {
+                        stddev = Math.Sqrt(Convert.ToDouble(command.ExecuteScalar()));
+                    }
+                }
+                else
+                {
+                    // Cached values calculated on the complete March dataset.
+                    average = 38.25765735;
+                    stddev = 18.68538455;
+                }
+                //*/
+                min = average - 2 * stddev; // This should catch about 95% of all games within this normalization region, assuming this does indeed have a mostly normal distribution.
+                max = average + 2 * stddev;
 
                 Console.WriteLine("Average: {0}", average);
                 Console.WriteLine("Std Dev: {0}", stddev);
@@ -128,49 +156,62 @@ namespace DominionML_SQL
                 if (rerandomize)
                 {
                     Console.WriteLine("Rerandomizing training, validation, and testing sets (this will take a while)");
-                    string sql = "PRAGMA journal_mode = OFF;";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                    using (SQLiteTransaction transaction = conn.BeginTransaction())
                     {
-                        command.ExecuteNonQuery();
+                        string sql = "PRAGMA journal_mode = OFF;";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        Console.Write(".");
+                        // Reset the randomizer column (used to divide training, validation, and test sets)
+                        sql = "UPDATE `instances` SET `randomizer` = ABS(RANDOM() % 100);";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        Console.Write(" .");
+                        sql = "DROP INDEX IF EXISTS `use_index`;";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        Console.Write(".");
+                        // [ training | test ]
+                        // [ [ validation | training ] | test ]
+                        sql = "UPDATE `instances` SET `use` = (CASE WHEN `randomizer` < (@trainingPercent * @validationPercent) * 100 THEN 'validation' WHEN `randomizer` < @trainingPercent * 100 THEN 'training' ELSE 'testing' END);";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.Parameters.AddWithValue("@trainingPercent", trainingPercent);
+                            command.Parameters.AddWithValue("@validationPercent", validationPercent);
+                            command.ExecuteNonQuery();
+                        }
+                        Console.Write(".");
+                        sql = "CREATE INDEX IF NOT EXISTS `use_index` ON `instances` (`use`);";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        Console.Write(".");
+                        sql = "PRAGMA journal_mode = ON;";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        Console.Write(".");
+                        sql = "VACUUM;";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        Console.WriteLine("done");
+
+                        transaction.Commit();
                     }
-                    // Reset the randomizer column (used to divide training, validation, and test sets)
-                    sql = "UPDATE `instances` SET `randomizer` = ABS(RANDOM() % 100);";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        command.ExecuteNonQuery();
-                    }
-                    Console.Write(" .");
-                    sql = "DROP INDEX IF EXISTS `use_index`;";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        command.ExecuteNonQuery();
-                    }
-                    // [ training | test ]
-                    // [ [ validation | training ] | test ]
-                    sql = "UPDATE `instances` SET `use` = (CASE WHEN `randomizer` < (@trainingPercent * @validationPercent) * 100 THEN 'validation' WHEN `randomizer` < @trainingPercent * 100 THEN 'training' ELSE 'testing' END);";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        command.Parameters.AddWithValue("@trainingPercent", trainingPercent);
-                        command.Parameters.AddWithValue("@validationPercent", validationPercent);
-                        command.ExecuteNonQuery();
-                    }
-                    Console.Write(".");
-                    sql = "CREATE INDEX IF NOT EXISTS `use_index` ON `instances` (`use`);";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        command.ExecuteNonQuery();
-                    }
-                    Console.Write(".");
-                    sql = "PRAGMA journal_mode = ON;";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        command.ExecuteNonQuery();
-                    }
-                    Console.WriteLine("done");
                 }
                 //*/
 
-                IEnumerable<string> features = columns.Where(IsFeatureColumn);
+                features = columns.Where(IsFeatureColumn);
                 // Build the string to int mapping for column indexes
                 Dictionary<string, int> featureIndexes = new Dictionary<string, int>();
                 int index = 0;
@@ -180,27 +221,44 @@ namespace DominionML_SQL
                 }
 
                 // Get the list of cards that should be trained
-                IList<string> cards = GetCards(conn);
+                cards = GetCards(conn);
                 //cards = cards.Take(1).ToList(); // Limit it to a single card for testing
-
-                // Create each of the tasks
-                DominionLearnerTask[] learnerTasks = new DominionLearnerTask[cards.Count];
-                Task[] tasks = new Task[cards.Count];
-                for (int i = 0; i < cards.Count; i++)
-                {
-                    learnerTasks[i] = new DominionLearnerTask(cards[i], features, conn, min, max);
-                    tasks[i] = Task.Factory.StartNew(learnerTasks[i].RunTask);
-                }
-                // Wait for all of them to run
-                Task.WaitAll(tasks);
-                // Dispose everything
-                foreach (DominionLearnerTask learnerTask in learnerTasks)
-                {
-                    learnerTask.Dispose();
-                }
-
-                Console.ReadLine();
+                //cards.Clear();
+                //cards.Add("Chancellor");
             }
+
+            // Create each of the tasks
+            DominionLearnerTask[] learnerTasks = new DominionLearnerTask[cards.Count];
+            Task[] tasks = new Task[cards.Count];
+            for (int i = 0; i < cards.Count; i++)
+            {
+                learnerTasks[i] = new DominionLearnerTask(cards[i], features, file, min, max);
+                tasks[i] = new Task(learnerTasks[i].RunTask);
+            }
+
+            // Start running some tasks
+            int concurrentTasks = Math.Min(System.Environment.ProcessorCount, cards.Count);
+            int nextTaskToRun = concurrentTasks;
+            Action<Task> runNextTaskLoop = null;
+            Action<Task> runNextTask = task => {
+                if (nextTaskToRun < tasks.Length)
+                {
+                    tasks[nextTaskToRun].Start();
+                    tasks[nextTaskToRun].ContinueWith(t => runNextTaskLoop(t));
+                    nextTaskToRun++;
+                }
+            };
+            runNextTaskLoop = runNextTask;
+            for (int i = 0; i < concurrentTasks; i++)
+            {
+                tasks[i].Start();
+                tasks[i].ContinueWith(runNextTask);
+            }
+
+            // Wait for all of them to run
+            Task.WaitAll(tasks);
+
+            Console.ReadLine();
         }
 
         // These are the hard coded, known non-feature column names.

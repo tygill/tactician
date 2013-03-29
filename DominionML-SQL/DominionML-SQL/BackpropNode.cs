@@ -75,6 +75,18 @@ namespace DominionML_SQL
         protected double error;
         protected double previousDelta = 0.0;
 
+        public virtual double FNet()
+        {
+            // Take the dot product of the inputs and their weights
+            double net = inputIndexes.Select(pair => pair.Key.Output * weights[pair.Value]).Sum();
+            return convertNetToSigmoidOutput(net);
+        }
+
+        public virtual double FNetPrime()
+        {
+            return Output * (1.0 - Output);
+        }
+
         public override void Train()
         {
             //Console.WriteLine("Training: {0}", Id);
@@ -94,12 +106,10 @@ namespace DominionML_SQL
             {
                 if (outputDirty)
                 {
-                    // Take the dot product of the inputs and their weights
-                    double net = inputIndexes.Select(pair => pair.Key.Output * weights[pair.Value]).Sum();
                     // Now we update the output before updating the weights.
                     // This has the same effect as storing all weight updates until after processing for all nodes,
                     // but doesn't require them to be revisted afterwards, and removes the pesky problem of storing all the deltas.
-                    output = convertNetToSigmoidOutput(net);
+                    output = FNet();
                     // Mark the output as being updated, so that accesses of this property while updating weights don't enter this update again
                     outputDirty = false;
                     //Console.WriteLine(string.Format("{0}: New output: {1}", Id, output));
@@ -114,7 +124,7 @@ namespace DominionML_SQL
             {
                 if (errorDirty)
                 {
-                    error = outputs.Select(node => node.Error * node.GetWeightFromNode(this)).Sum() * Output * (1.0 - Output);
+                    error = outputs.Select(node => node.Error * node.GetWeightFromNode(this)).Sum() * FNetPrime();
                     errorDirty = false;
                 }
                 return error;
@@ -133,6 +143,17 @@ namespace DominionML_SQL
             //Console.WriteLine("OutputNode: {0}", Id);
         }
 
+        public override double FNet()
+        {
+            // Take the dot product of the inputs and their weights
+            return inputIndexes.Select(pair => pair.Key.Output * weights[pair.Value]).Sum();
+        }
+
+        public override double FNetPrime()
+        {
+            return 1.0;
+        }
+
         // This is overriden to disable the sigmoid conversion of net to output
         /*
         public override double Output
@@ -142,11 +163,11 @@ namespace DominionML_SQL
                 if (outputDirty)
                 {
                     // Take the dot product of the inputs and their weights
-                    double net = inputIndexes.Select(pair => pair.Key.Output * weights[pair.Value]).Sum();
+                    //double net = inputIndexes.Select(pair => pair.Key.Output * weights[pair.Value]).Sum();
                     // Now we update the output before updating the weights.
                     // This has the same effect as storing all weight updates until after processing for all nodes,
                     // but doesn't require them to be revisted afterwards, and removes the pesky problem of storing all the deltas.
-                    output = net;
+                    output = FNet();
                     // Mark the output as being updated, so that accesses of this property while updating weights don't enter this update again
                     outputDirty = false;
                     //Console.WriteLine(string.Format("{0}: New output: {1}", Id, output));
@@ -162,7 +183,7 @@ namespace DominionML_SQL
             {
                 if (errorDirty)
                 {
-                    error = (Target - Output) * Output * (1.0 - Output);
+                    error = (Target - Output) * FNetPrime();// *Output * (1.0 - Output);
                     errorDirty = false;
                 }
                 return error;
