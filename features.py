@@ -1,6 +1,7 @@
 from dominion import *
 from isotropic import *
 import sys
+import traceback
 import os
 import time
 from optparse import OptionParser
@@ -15,9 +16,130 @@ def clean(s):
     
 def sqlclean(s):
     return re.sub(r'[\W]+', '', s.replace(" ", "_").lower())
+    
+    
+class Feature:
+    features = []
+    sql_names = {}
+    
+    def __init__(self, name, func, values):
+        self.name = name
+        self.arff_name = clean(name)
+        self.sql_name = sqlclean(name)
+        Feature.sql_names[self.sql_name] = self
+        self.func = func
+        self.values = values
+        
+    def extract(self, game):
+        return self.func(game)
 
+def add_feature(func, name, values = 'REAL'):
+    Feature.features.append(Feature(name, func, values))
+    
+def add_card_feature(card):
+    add_feature(lambda game: 1 if game.is_card_in_supply(card) else 0, '{0} in Supply?'.format(card), [0, 1])
+    
+def add_card_bought_feature(card):
+    add_feature(lambda game: game.get_card_acquired_count(card) / game.card_initial_supply(card), "{0} Acquired".format(pluralize_card(card)))
+    
+def add_my_card_feature(card):
+    add_feature(lambda game: game.get_player(game.possessor).get_card_count(card) / game.card_initial_supply(card), "{0} In Player Deck".format(pluralize_card(card)))
+    
+# Binners
+# Bins money to 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12+
+def bin_money_feature(money):
+    if money >= 12:
+        money = 12
+    money -= 1
+    return money / 11.0
+        
+# Bins buys to 1, 2, 3, 4, 5+
+def bin_buys_feature(buys):
+    if buys >= 5:
+        buys = 5
+    buys -= 1
+    return buys / 4.0
+        
+# Bins actions to 1, 2-4, 5-7, 8-10, 11-15, 16-20, 21-29, 30+
+def bin_actions_feature(actions):
+    if actions <= 1:
+        ret = 0
+    elif actions <= 4:
+        ret = 1
+    elif actions <= 7:
+        ret = 2
+    elif actions <= 10:
+        ret = 3
+    elif actions <= 15:
+        ret = 4
+    elif actions <= 20:
+        ret = 5
+    elif actions <= 29:
+        ret = 6
+    else:
+        ret = 7
+    return ret / 7.0
+    
+# Game features
+# Add the cards features
+for card in sorted(supply_cards):
+    # Python lambda's make this need to be a separate function. That way, card is a new scope.
+    add_card_feature(card)
+add_feature(lambda game: game.get_num_players() / 6.0, "Number of Players")
+add_feature(lambda game: 1 if game.supply_contains_any(plus_action_cards) else 0, "+Action Cards in Supply?", [0, 1]) # +2 Action or more cards only. Chaining cards (+1 Action) don't count.
+add_feature(lambda game: 1 if game.supply_contains_any(plus_buy_cards) else 0, "+Buy Cards in Supply?", [0, 1])
+add_feature(lambda game: 1 if game.supply_contains_any(drawing_cards) else 0, "Drawing Cards in Supply?", [0, 1]) # +2 Cards or more only. 
+add_feature(lambda game: 1 if game.supply_contains_any(cursing_cards) else 0, "Cursing Cards in Supply?", [0, 1])
+add_feature(lambda game: 1 if game.supply_contains_any(trashing_cards) else 0, "Trashing Cards in Supply?", [0, 1])
+add_feature(lambda game: 1 if game.supply_contains_any(attack_cards) else 0, "Attack Cards in Supply?", [0, 1])
+
+# Move context features
+# This is normalized by looking at the max in the 8 gb dataset. 61 was the max, so this should be good.
+add_feature(lambda game: (game.turn_number - 1.0) / 50.0, "Turn Number")
+add_feature(lambda game: bin_money_feature(game.money), "Money")
+add_feature(lambda game: bin_buys_feature(game.buys), "Buys")
+add_feature(lambda game: bin_actions_feature(game.actions), "Actions")
+
+# Game state features
+add_feature(lambda game: game.get_num_empty_piles() / 3.0, "Empty Piles")
+# Add features for how many of each victory card have been bought so far (in games where they aren't in the supply, they are now set to 0 to indicate that none have been bought)
+for card in sorted(victory_cards):
+    # Again, this needs to be in a separate function to make the card get stored in the closure
+    add_card_bought_feature(card)
+add_card_bought_feature('Curse')
+
+# Player deck stats
+# Using game.get_player(game.possessor) gets the stats for the controlling player - either the possessor, or the regular player (as it will be None if there isn't a possessor, in which case the regular player will be retrieved.)
+# This will need to be normalized by the runner
+# Again, these are normalized by looking at the max of the large dataset
+add_feature(lambda game: game.get_player(game.possessor).get_deck_size() / 100.0, "Player Deck Size")
+add_feature(lambda game: game.get_player(game.possessor).get_action_card_count() / 40.0, "Player Deck Action Cards")
+add_feature(lambda game: game.get_player(game.possessor).get_victory_card_count() / 20.0, "Player Deck Victory Cards")
+add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_count() / 60.0, "Player Deck Treasure Cards")
+add_feature(lambda game: game.get_player(game.possessor).get_action_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Action Card Ratio")
+add_feature(lambda game: game.get_player(game.possessor).get_victory_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Victory Card Ratio")
+add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Treasure Card Ratio")
+# How many of each card are in my deck?
+for card in sorted(cards):
+    add_my_card_feature(card)
+    
+# Output features
+add_feature(lambda game: game.get_player(game.possessor).get_final_score(), "Player Final Score")
+add_feature(lambda game: game.get_average_final_score(), "Average Final Score")
+
+# Timestamp features
+add_feature(lambda game: int(game.game_id, 16), "Game Id")
+add_feature(lambda game: game.year, "Game Year")
+add_feature(lambda game: game.month, "Game Month")
+add_feature(lambda game: game.day, "Game Day")
+add_feature(lambda game: game.hour, "Game Hour")
+add_feature(lambda game: game.minute, "Game Minute")
+add_feature(lambda game: game.second, "Game Second")
+
+    
+    
 # This class handles logging features to be trained on
-class feature_extractor:
+class FeatureExtractor:
     
     def __init__(self, filename, arff=True, sql=False):
         self.dbcon = None
@@ -49,77 +171,31 @@ class feature_extractor:
             self.db.execute(sql)
             sql = "CREATE INDEX IF NOT EXISTS use_index ON instances (use);"
             self.db.execute(sql)
+            sql = "CREATE INDEX IF NOT EXISTS game_second_index ON instances (game_second);"
+            self.db.execute(sql)
             
             self.dbcon.commit()
             self.dbcon.close()
         
     def init_features(self):
         # Add the features
+        for feature in Feature.features:
+            self.add_feature(feature)
         
-        # Game features
-        # Add the cards features
-        for card in sorted(supply_cards):
-            # Python lambda's make this need to be a separate function. That way, card is a new scope.
-            self.add_card_feature(card)
-        self.add_feature(lambda game: game.get_num_players(), "Number of Players")
-        self.add_feature(lambda game: 1 if game.supply_contains_any(plus_action_cards) else 0, "+Action Cards in Supply?", [0, 1]) # +2 Action or more cards only. Chaining cards (+1 Action) don't count.
-        self.add_feature(lambda game: 1 if game.supply_contains_any(plus_buy_cards) else 0, "+Buy Cards in Supply?", [0, 1])
-        self.add_feature(lambda game: 1 if game.supply_contains_any(drawing_cards) else 0, "Drawing Cards in Supply?", [0, 1]) # +2 Cards or more only. 
-        self.add_feature(lambda game: 1 if game.supply_contains_any(cursing_cards) else 0, "Cursing Cards in Supply?", [0, 1])
-        self.add_feature(lambda game: 1 if game.supply_contains_any(trashing_cards) else 0, "Trashing Cards in Supply?", [0, 1])
-        self.add_feature(lambda game: 1 if game.supply_contains_any(attack_cards) else 0, "Attack Cards in Supply?", [0, 1])
-        
-        # Move context features
-        self.add_feature(lambda game: game.turn_number, "Turn Number")
-        self.add_feature(lambda game: game.money, "Money")
-        self.add_feature(lambda game: game.buys, "Buys")
-        self.add_feature(lambda game: game.actions, "Actions")
-        
-        # Game state features
-        self.add_feature(lambda game: game.get_num_empty_piles(), "Empty Piles")
-        # Add features for how many of each victory card are left in the supply (in games where they aren't in the supply, I've set them to instead be however many there would to start if they would be in the supply)
-        for card in sorted(victory_cards):
-            # Again, this needs to be in a separate function to make the card get stored in the closure
-            self.add_card_left_feature(card)
-        self.add_feature(lambda game: game.get_supply_count('Curse', True), "Curses Left")
-        
-        # Player deck stats
-        # Using game.get_player(game.possessor) gets the stats for the controlling player - either the possessor, or the regular player (as it will be None if there isn't a possessor, in which case the regular player will be retrieved.)
-        self.add_feature(lambda game: game.get_player(game.possessor).get_deck_size(), "Player Deck Size")
-        self.add_feature(lambda game: game.get_player(game.possessor).get_action_card_count(), "Player Deck Action Cards")
-        self.add_feature(lambda game: game.get_player(game.possessor).get_victory_card_count(), "Player Deck Victory Cards")
-        self.add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_count(), "Player Deck Treasure Cards")
-        self.add_feature(lambda game: game.get_player(game.possessor).get_action_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Action Card Ratio")
-        self.add_feature(lambda game: game.get_player(game.possessor).get_victory_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Victory Card Ratio")
-        self.add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Treasure Card Ratio")
-        # How many of each card are in my deck?
-        for card in sorted(cards):
-            self.add_my_card_feature(card)
-        
-            
         if self.arff:
             # Output features are hard coded in.
             self.file.write("@ATTRIBUTE 'Card_Bought' {None," + ','.join(map(clean, sorted(supply_cards))) + '}\n')
             self.file.write("@ATTRIBUTE 'Card_Output_Weight' REAL\n")
-            self.file.write("@ATTRIBUTE 'Player_Final_Score' REAL\n")
-            self.file.write("@ATTRIBUTE 'Average_Final_Score' REAL\n")
+            #self.file.write("@ATTRIBUTE 'Player_Final_Score' REAL\n")
+            #self.file.write("@ATTRIBUTE 'Average_Final_Score' REAL\n")
             
             # Close the features
             self.file.write('\n@DATA:\n')
         
-    def add_feature(self, func, name, values = 'REAL'):
+    def add_feature(self, feature):
         if self.arff:
-            self.file.write("@ATTRIBUTE '{0}' {1}\n".format(clean(name), values if isinstance(values, basestring) else '{' + ','.join(map(str, values)) + '}'))
-        self.features.append((name, func, clean(name), sqlclean(name), values))
-        
-    def add_card_feature(self, card):
-        self.add_feature(lambda game: 1 if game.is_card_in_supply(card) else 0, '{0} in Supply?'.format(card), [0, 1])
-        
-    def add_card_left_feature(self, card):
-        self.add_feature(lambda game: game.get_supply_count(card, True), "{0} Left".format(pluralize_card(card)))
-        
-    def add_my_card_feature(self, card):
-        self.add_feature(lambda game: game.get_player(game.possessor).get_card_count(card), "{0} In Player Deck".format(pluralize_card(card)))
+            self.file.write("@ATTRIBUTE '{0}' {1}\n".format(feature.arff_name, feature.values if isinstance(feature.values, basestring) else '{' + ','.join(map(str, features.values)) + '}'))
+        self.features.append(feature)
         
     def init_db(self):
         self.dbcon = sqlite3.connect("features.sql3")
@@ -136,12 +212,12 @@ class feature_extractor:
                 {0}
                 card_bought TEXT,
                 card_output_weight REAL,
-                player_final_score REAL,
-                average_final_score REAL,
                 use TEXT DEFAULT NULL,
                 randomizer INT
             );
         """.format(''.join(self.get_sql_create_columns())) # '\n                '
+        #player_final_score REAL,
+        #average_final_score REAL,
         
         #print sql
         self.db.execute(sql)
@@ -162,8 +238,8 @@ class feature_extractor:
         
     def get_sql_create_columns(self):
         cols = []
-        for name, func, arff, sql, values in self.features:
-            cols.append('{0} {1},'.format(sql, self.get_sql_type(values)))
+        for feature in self.features:
+            cols.append('{0} {1},'.format(feature.sql_name, self.get_sql_type(feature.values)))
         return cols
         
     def add_sql_instance(self, instance):
@@ -182,14 +258,14 @@ class feature_extractor:
     def get_sql_values(self, instance):
         cols = []
         for i in range(len(self.features)):
-            if self.features[i][4] == 'TEXT':
+            if self.features[i].values == 'TEXT':
                 cols.append("'{0}',".format(instance[i]))
             else:
                 cols.append('{0},'.format(instance[i]))
-        cols.append("'{0}',".format(instance[-4]))
-        cols.append('{0},'.format(instance[-3]))
-        cols.append('{0},'.format(instance[-2]))
+        cols.append("'{0}',".format(instance[-2]))
         cols.append('{0}'.format(instance[-1]))
+        #cols.append('{0},'.format(instance[-2]))
+        #cols.append('{0}'.format(instance[-1]))
         return cols
         
     def parsing_line_handler(self, game, line_num, line):
@@ -206,11 +282,11 @@ class feature_extractor:
         
     def write_instance(self, game, card):
         # Extract the information from the current game state and log it
-        instance = [feature(game) for name, feature, arff, sql, values in self.features]
+        instance = [feature.extract(game) for feature in self.features]
         instance.append(clean(card))
         instance.append(game.calc_output_weight(game.possessor)) # Using game.possessor will use either the possessing player, or the current player if there isn't a possessor.
-        instance.append(game.get_player(game.possessor).get_final_score())
-        instance.append(game.get_average_final_score())
+        #instance.append(game.get_player(game.possessor).get_final_score())
+        #instance.append(game.get_average_final_score())
         #instance = ','.join() + ',{0},{1}'.format(clean(card), game.calc_output_weight(game.possessor))
         self.pending_instances.append(instance)
         
@@ -278,11 +354,14 @@ def rename(filename, src, dest):
             os.rename(old, new)
     
 def process_file(dirname, filename):
-    match = re.match(r'game-(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})-\d{6}-[\d\w]{8}\.html', filename)
+    match = re.match(r'game-(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})-(?P<hour>\d{2})(?P<minute>\d{2})(?P<second>\d{2})-[\d\w]{8}\.html', filename)
     if match:
         year = int(match.group('year'))
         month = int(match.group('month'))
         day = int(match.group('day'))
+        hour = int(match.group('hour'))
+        minute = int(match.group('minute'))
+        second = int(match.group('second'))
     file = os.path.join(dirname, filename)
     print 'Parsing: {0}'.format(file)
     error = parser.read(file)
@@ -302,8 +381,8 @@ def process_file(dirname, filename):
         rename(filename, dirname, os.path.join(log_path, subdir_path.format(year, month, day)))
     
 if __name__ == '__main__':
-    parser = isotropic_parser()
-    features = feature_extractor('features.arff', '-no-arff' not in sys.argv, '-sql' in sys.argv)
+    parser = IsotropicParser()
+    features = FeatureExtractor('features.arff', '-arff' in sys.argv, '-no-sql' not in sys.argv)
     parser.register_handler(parsing_line_event, features.parsing_line_handler)
     parser.register_handler(turn_complete_event, features.turn_complete_handler)
     parser.register_handler(unhandled_line_event, features.unhandled_line_handler)
@@ -322,8 +401,10 @@ if __name__ == '__main__':
         print ' -u: Reprocess unhandled directory'
         print ' -e: Reprocess error directory'
         print ' -n: Don\'t process the main directory'
-        print ' -sql: Export to sqlite db'
-        print ' -no-arff: Don\'t export an arff file'
+        #print ' -sql: Export to sqlite db (default)'
+        print ' -no-sql: Don\'t export to sqlite db'
+        print ' -arff: Export an arff file'
+        #print ' -no-arff: Don\'t export an arff file (default)'
         exit(0)
         
     # Start our overall timer
@@ -375,7 +456,9 @@ if __name__ == '__main__':
     except KeyboardInterrupt:
         print 'Bailing out due to Ctrl-C'
     except Exception, e:
-        print 'Catching {0}'.format(e)
+        print 'Catching "{0}" on line {1}'.format(e, sys.exc_info()[-1].tb_lineno)
+        ex_type, ex, tb = sys.exc_info()
+        traceback.print_tb(tb)
         
     features.close()
     print 'Finished building features. (Took {0} minutes)'.format((time.time() - start) / 60.0)

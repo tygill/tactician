@@ -50,6 +50,7 @@
     <Compile Include="BackpropagationLearner.cs" />
     <Compile Include="BackpropNetwork.cs" />
     <Compile Include="BackpropNode.cs" />
+    <Compile Include="Dominion.cs" />
     <Compile Include="DominionLearner.cs" />
     <Compile Include="DominionLearnerTask.cs" />
     <Compile Include="DominionML.cs" />

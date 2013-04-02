@@ -107,7 +107,7 @@ def compare_decks(expected, actual):
             ret.append('{0}: Unexpected {1}'.format(card, count))
     return ret
     
-class dominion_player:
+class DominionPlayer:
     
     def __init__(self, game, name):
         self.game = game
@@ -248,7 +248,7 @@ class dominion_player:
         self.pirate_ship_tokens += tokens
     
 # This class stores information about the state of a game of dominion
-class dominion_game:
+class DominionGame:
     
     def __init__(self):
         self.supply = {}
@@ -264,6 +264,12 @@ class dominion_game:
         self.empty_piles = []
         self.winner = None
         self.game_id = None
+        self.year = None
+        self.month = None
+        self.day = None
+        self.hour = None
+        self.minute = None
+        self.second = None
         self.masquerade_used = False
         
         # Turn context
@@ -285,11 +291,19 @@ class dominion_game:
         self.revealed = []
         self.last_reveal_player = None # Used by Saboteur
         
+    def set_timestamp(self, year, month, day, hour, minute, second):
+        self.year = year
+        self.month = month
+        self.day = day
+        self.hour = hour
+        self.minute = minute
+        self.second = second
+        
     # Game Initialization functions
     # -----------------------------
     
     def add_player(self, player):
-        self.players[player] = dominion_player(self, player)
+        self.players[player] = DominionPlayer(self, player)
         self.num_players = len(self.players)
         
     def set_final_score(self, player, score):
@@ -357,15 +371,7 @@ class dominion_game:
         self.add_card_to_supply('Curse')
         # Setup initial supply counts for each card in the supply
         for card in self.supply.keys():
-            if is_victory(card):
-                self.supply[card] = self.victory_card_initial_supply(card)
-            elif is_curse(card):
-                self.supply[card] = self.curse_card_initial_supply()
-            elif is_treasure(card):
-                self.supply[card] = self.treasure_card_initial_supply(card)
-            else:
-                # All other cards start with 10 in the supply (except some from Dark Ages, but those aren't supported)
-                self.supply[card] = 10
+            self.supply[card] = self.card_initial_supply(card)
         # Initialize the players starting decks
         for player in self.players.values():
             for i in range(7):
@@ -410,12 +416,14 @@ class dominion_game:
     # ----
     
     # Resets all the turn context variables
-    def start_new_turn(self, player, turn_number = None, possessor = None):
+    def start_new_turn(self, player, turn_number = None, possessor = None, increment_turn = False):
         self.current_player = player
         self.possessor = possessor
         # If the turn number is None, then we don't modify it. We leave it what it was before.
         if turn_number is not None:
             self.turn_number = turn_number
+        elif increment_turn:
+            self.turn_number += 1
             
         # Update the counts in the current players deck
         self.get_player().update_properties()
@@ -631,6 +639,20 @@ class dominion_game:
             else:
                 return None
                 
+    def get_card_acquired_count(self, card):
+        if card in self.supply.keys():
+            initial_supply = self.card_initial_supply(card)
+            # Estates and Copper start lower, so factor that in
+            if card == 'Estate':
+                initial_supply -= 3 * self.num_players
+            elif card == 'Copper':
+                initial_supply -= 7 * self.num_players
+            return initial_supply - self.supply[card]
+        else:
+            # If the card isn't in the supply, then don't count it as being acquired
+            # (This doesn't deal super well with Black Market, but that should be fine)
+            return 0
+                
     def supply_contains_any(self, cards):
         for card in self.supply.keys():
             if card in cards:
@@ -646,6 +668,17 @@ class dominion_game:
         
     def get_revealed(self):
         return self.revealed
+    
+    def card_initial_supply(self, card):
+        if is_victory(card):
+            return self.victory_card_initial_supply(card)
+        elif is_curse(card):
+            return self.curse_card_initial_supply()
+        elif is_treasure(card):
+            return self.treasure_card_initial_supply(card)
+        else:
+            # All other cards start with 10 in the supply (except some from Dark Ages, but those aren't supported)
+            return 10
     
     # Depending on the number of players, the victory card piles start with different sizes
     def victory_card_initial_supply(self, card):

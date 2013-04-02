@@ -10,7 +10,7 @@ namespace DominionML_SQL
     {
         public BackpropNetwork Backprop { get; private set; }
 
-        public BackpropagationLearner(string card, int inputs, int outputs, BackpropNetwork.HiddenLayerSize hiddenLayerSize = null, int layers = 1)
+        public BackpropagationLearner(string card, IList<string> inputs, int outputs, BackpropNetwork.HiddenLayerSize hiddenLayerSize = null, int layers = 1)
             : base(card)
         {
             Backprop = new BackpropNetwork();
@@ -29,14 +29,24 @@ namespace DominionML_SQL
             return Backprop.Predict(features);
         }
 
+        public override string Folder { get { return "Backprop"; } }
+
         public override string Serialize()
         {
-            throw new NotImplementedException();
+            StringBuilder builder = new StringBuilder();
+            Backprop.Serialize(builder);
+            return builder.ToString();
         }
 
         public override void Load(string serialized)
         {
             throw new NotImplementedException();
+        }
+
+        public override void Dispose()
+        {
+            Backprop.Dispose();
+            Backprop = null;
         }
     }
 }

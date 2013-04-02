@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Data.SQLite;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 namespace DominionML_SQL
@@ -12,334 +14,371 @@ namespace DominionML_SQL
     {
         public string Card { get; private set; }
         public IList<string> Features { get; private set; }
-        public DominionLearner Learner { get; private set; }
+        public double TrainingPercent { get; private set; }
+        public double ValidationPercent { get; private set; }
         public double NormalizationMin { get; private set; }
         public double NormalizationMax { get; private set; }
+        public IDictionary<string, double> FeatureNormalizationMins { get; private set; }
+        public IDictionary<string, double> FeatureNormalizationMaxs { get; private set; }
         private string DatabaseFile;
 
-        public DominionLearnerTask(string card, IEnumerable<string> features, string dbFile, double min, double max)
+        public DominionLearnerTask(string card, IList<string> features, string dbFile, double trainingPercent, double validationPercent, double min, double max, IDictionary<string, double> featureMins, IDictionary<string, double> featureMaxs)
         {
             Card = card;
+            TrainingPercent = trainingPercent;
+            ValidationPercent = validationPercent;
             NormalizationMin = min;
             NormalizationMax = max;
             Features = new List<string>(features);
-            Learner = LearnerFactory.CreateDominionLearner(Card, Features);
             DatabaseFile = dbFile;
+            FeatureNormalizationMins = featureMins;
+            FeatureNormalizationMaxs = featureMaxs;
         }
 
         public void RunTask()
         {
             Stopwatch stopwatch = Stopwatch.StartNew();
 
-            using (SQLiteConnection conn = new SQLiteConnection("Data Source=:memory:;Version=3;"))
+            Console.WriteLine("{0}: Beginning Training", Card);
+
+            // Prune out some features that we don't want to use
+            Features = Features.Where(name => !name.Contains("_in_supply") || name.Contains("_cards_in_supply")).Where(name => !name.Contains("_in_player_deck") || name == string.Format("{0}_in_player_deck", Regex.Replace(Dominion.GetCard(Card).Plural, @"[\W]+", "").Replace(' ', '_').ToLowerInvariant())).ToList();
+            //foreach (string name in Features)
+            //{
+            //    Console.WriteLine("{0}", name);
+            //}
+
+
+            // How likely is a particular card in a given game? This will be used to boost features that are only in a specific game.
+            double likelihood = 0.0;
             {
-                conn.Open();
-
-                string sql;
-
-                Console.WriteLine("{0}: Creating memory database", Card);
-                // Attach and extract the data from the source database
-                sql = @"ATTACH @db AS `source_db`;";
-                using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                for (int i = 0; i < 10; i++)
                 {
-                    command.Parameters.AddWithValue("@db", DatabaseFile);
-                    command.ExecuteNonQuery();
+                    likelihood += 1.0 / (Dominion.Cards.Count() - i);
                 }
-                Console.WriteLine("{0}: Filling...", Card);
-                sql = String.Format(@"CREATE TABLE `main`.`instances` AS SELECT `{0}`,`card_bought`, `player_final_score`, `use`, `randomizer` FROM `source_db`.`instances` WHERE `source_db`.`instances`.`card_bought` = @card_bought;", string.Join("`, `", Features));
-                using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                {
-                    command.Parameters.AddWithValue("@card_bought", Card);
-                    command.ExecuteNonQuery();
-                }
-                Console.WriteLine("{0}: Indexing...", Card);
-                sql = @"CREATE INDEX `main`.`use_index` ON `instances` (`use`);";
-                using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                {
-                    command.ExecuteNonQuery();
-                }
-                sql = @"DETACH `source_db`;";
-                using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                {
-                    command.ExecuteNonQuery();
-                }
-                Console.WriteLine("{0}: Memory database complete", Card);
+            }
+            Console.WriteLine("Likelihood: {0}", likelihood);
 
 
-                // Get the total number of instances we have available
-                int totalInstances = 0;
-                int trainingInstances = 0;
-                int validationInstances = 0;
-                int testingInstances = 0;
-                //sql = @"SELECT COUNT(*) FROM `instances` WHERE `card_bought` = @card_bought AND `use` = 'training'";
-                sql = @"SELECT COUNT(*) FROM `instances` WHERE `use` = 'training'";
-                using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                {
-                    //command.Parameters.AddWithValue("@card_bought", Card);
-                    trainingInstances = Convert.ToInt32(command.ExecuteScalar());
-                }
-                //sql = @"SELECT COUNT(*) FROM `instances` WHERE `card_bought` = @card_bought AND `use` = 'validation'";
-                sql = @"SELECT COUNT(*) FROM `instances` WHERE `use` = 'validation'";
-                using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                {
-                    //command.Parameters.AddWithValue("@card_bought", Card);
-                    validationInstances = Convert.ToInt32(command.ExecuteScalar());
-                }
-                //sql = @"SELECT COUNT(*) FROM `instances` WHERE `card_bought` = @card_bought AND `use` = 'testing'";
-                sql = @"SELECT COUNT(*) FROM `instances` WHERE `use` = 'testing'";
-                using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                {
-                    //command.Parameters.AddWithValue("@card_bought", Card);
-                    testingInstances = Convert.ToInt32(command.ExecuteScalar());
-                }
-                /*
-                sql = @"SELECT COUNT(*) FROM `instances` WHERE `card_bought` = @card_bought";
-                using (SQLiteCommand command = new SQLiteCommand(sql, Connection))
-                {
-                    command.Parameters.AddWithValue("@card_bought", Card);
-                    totalInstances = Convert.ToInt32(command.ExecuteScalar());
-                }
-                //*/
-                totalInstances = trainingInstances + validationInstances + testingInstances;
-                Console.WriteLine("{0}: {1} Instances ({2} training, {3} validation, {4} testing)", Card, totalInstances, trainingInstances, validationInstances, testingInstances);
-                /*
-                bool tmp = true;
-                if (tmp)
-                {
-                    return;
-                }
-                 */
+            using (DominionLearner Learner = LearnerFactory.CreateDominionLearner(Card, Features))
+            {
+                Directory.CreateDirectory(Learner.Folder);
 
-                // Epoch status
-                int epochSize = trainingInstances; // Math.Min(trainingInstances, 500);
-                int validationEpochSize = validationInstances; // Math.Min(validationInstances, 200);
-                int epochsTrained = 0;
-
-                // Termination criteria
-                int terminationWindowSize = 5; // Epochs to consider for completion
-                Queue<double> currentErrorWindow = new Queue<double>(terminationWindowSize + 1); // The +1 is so that we can enqueue, check if the size is greater, and then dequeue it rather than checking before enqueuing a new error
-                Queue<double> previousErrorWindow = new Queue<double>(terminationWindowSize + 1);
-                // Make sure the initial average is high
-                currentErrorWindow.Enqueue(double.MaxValue);
-                previousErrorWindow.Enqueue(double.MaxValue);
-
-                // Temporary variable
-                double[] instance = new double[Features.Count];
-
-                // Train the learner
-                uint trained = 0;
-                bool allTrained = false;
-                bool done = false;
-                double previousMSE = double.MaxValue;
-                //sql = string.Format(@"SELECT `{0}`, `player_final_score` FROM `instances` WHERE `card_bought` = @card_bought AND `use` = @use ORDER BY RANDOM();", string.Join("`, `", Features));
-                sql = string.Format(@"SELECT `{0}`, `player_final_score` FROM `instances` WHERE `use` = @use ORDER BY RANDOM();", string.Join("`, `", Features));
-                SQLiteDataReader trainingReader = SQLReader(sql, "training", conn); // Bootstrap these
-                SQLiteDataReader validationReader = SQLReader(sql, "validation", conn);
-                Stopwatch epochWatch = new Stopwatch();
-                while (!(done && allTrained))
+                using (StreamWriter log = new StreamWriter(String.Format("{0}\\{1}.txt", Learner.Folder, Card), false))
                 {
-                    epochWatch.Restart();
-
-                    // Don't train on the first epoch
-                    if (epochsTrained != 0)
+                    using (SQLiteConnection conn = new SQLiteConnection(@"Data Source=:memory:;Version=3;"))
                     {
-                        for (int e = 0; e < epochSize; e++)
-                        {
-                            // If there's nothing left to read, then restart the reader
-                            while (!trainingReader.Read())
-                            {
-                                trainingReader.Dispose();
-                                allTrained = true; // All training instances have been used at least once
-                                trainingReader = null;
-                                trainingReader = SQLReader(sql, "training", conn);
-                            }
+                        conn.Open();
 
-                            // Read each feature from our database result
-                            for (int i = 0; i < Features.Count; i++)
-                            {
-                                instance[i] = trainingReader.GetDouble(i);
-                            }
-                            // The target output is the last column in the row
-                            Learner.TrainInstance(instance, Normalize(trainingReader.GetDouble(Features.Count)));
-                            trained++;
+                        string sql;
+
+                        // Create an in-memory database to load data from
+                        log.WriteLine("{0}: Creating in-memory database", Card);
+                        // Attach and extract the data from the source database
+                        sql = @"ATTACH @db AS `source_db`;";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.Parameters.AddWithValue("@db", DatabaseFile);
+                            command.ExecuteNonQuery();
                         }
-                    }
 
-                    // Test the predictive accuracy on the entire validation set
-                    //List<double> targets = new List<double>(validationInstances);
-                    //List<double> errors = new List<double>(validationInstances);
-                    double sse = 0.0;
-                    for (int e = 0; e < validationEpochSize; e++)
-                    {
-                        // If there's nothing left to read, then restart the reader
-                        while (!validationReader.Read())
+                        log.WriteLine("{0}: Copying data...", Card);
+                        //sql = String.Format(@"CREATE TABLE `main`.`instances` AS SELECT `{0}`,`card_bought`, `player_final_score`, `use`, `randomizer` FROM `source_db`.`instances` WHERE `source_db`.`instances`.`card_bought` = @card_bought;", string.Join("`, `", Features));
+                        sql = String.Format(@"CREATE TABLE `main`.`instances` AS SELECT `{0}`,`card_bought`, `player_final_score`, `game_second` FROM `source_db`.`instances` WHERE `source_db`.`instances`.`card_bought` = @card_bought;", string.Join("`, `", Features));
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
                         {
+                            command.Parameters.AddWithValue("@card_bought", Card);
+                            command.ExecuteNonQuery();
+                        }
+                        sql = @"DETACH `source_db`;";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        log.WriteLine("{0}: Creating index...", Card);
+                        //sql = @"CREATE INDEX `main`.`use_index` ON `instances` (`use`);";
+                        sql = @"CREATE INDEX `main`.`game_second_index` ON `instances` (`game_second`);";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.ExecuteNonQuery();
+                        }
+                        log.WriteLine("{0}: Creation of in-memory database complete", Card);
+
+
+                        // Get the total number of instances we have available
+                        int totalInstances = 0;
+                        int trainingInstances = 0;
+                        int validationInstances = 0;
+                        int testingInstances = 0;
+                        // Using the second field (0-60) as the set divider gives these splits
+                        double trainingCutoff = TrainingPercent * 60;
+                        double validationCutoff = ValidationPercent * trainingCutoff;
+                        // [<0> Validation <validationCutof> Training <trainingCutoff> Testing<60>]
+                        sql = @"SELECT COUNT(*) FROM `instances` WHERE `game_second` >= @validationCutoff AND `game_second` < @trainingCutoff;";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.Parameters.AddWithValue("@trainingCutoff", trainingCutoff);
+                            command.Parameters.AddWithValue("@validationCutoff", validationCutoff);
+                            trainingInstances = Convert.ToInt32(command.ExecuteScalar());
+                        }
+                        sql = @"SELECT COUNT(*) FROM `instances` WHERE `game_second` < @validationCutoff;";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.Parameters.AddWithValue("@validationCutoff", validationCutoff);
+                            validationInstances = Convert.ToInt32(command.ExecuteScalar());
+                        }
+                        sql = @"SELECT COUNT(*) FROM `instances` WHERE `game_second` >= @trainingCutoff;";
+                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+                        {
+                            command.Parameters.AddWithValue("@trainingCutoff", trainingCutoff);
+                            testingInstances = Convert.ToInt32(command.ExecuteScalar());
+                        }
+                        totalInstances = trainingInstances + validationInstances + testingInstances;
+                        log.WriteLine("{0}: {1} Instances ({2} training, {3} validation, {4} testing)", Card, totalInstances, trainingInstances, validationInstances, testingInstances);
+
+
+                        // Epoch status
+                        int trainingsPerEpoch = trainingInstances; // Math.Min(trainingInstances, 500);
+                        int validationsPerEpoch = validationInstances; // Math.Min(validationInstances, 200);
+                        int epochsTrained = 0;
+                        int maxEpochs = int.MaxValue;
+
+                        // Termination criteria
+                        int terminationWindowSize = 20; // Epochs to consider for completion
+                        Queue<double> currentErrorWindow = new Queue<double>(terminationWindowSize + 1); // The +1 is so that we can enqueue, check if the size is greater, and then dequeue it rather than checking before enqueuing a new error
+                        Queue<double> previousErrorWindow = new Queue<double>(terminationWindowSize + 1);
+                        // Make sure the initial average is high
+                        //currentErrorWindow.Enqueue(double.MaxValue);
+                        //previousErrorWindow.Enqueue(double.MaxValue);
+                        // This is now handled by not training on the first epoch
+
+                        // Temporary variable
+                        double[] instance = new double[Features.Count];
+
+                        // Train the learner
+                        uint totalTrained = 0;
+                        bool allTrained = false;
+                        bool done = false;
+                        double previousMSE = double.MaxValue;
+                        sql = string.Format(@"SELECT `{0}`, `player_final_score` FROM `instances` WHERE {{0}} ORDER BY RANDOM();", string.Join("`, `", Features));
+                        using (SQLiteCommand trainingCommand = new SQLiteCommand(string.Format(sql, "`game_second` >= @validationCutoff AND `game_second` < @trainingCutoff"), conn))
+                        using (SQLiteCommand validationCommand = new SQLiteCommand(string.Format(sql, "`game_second` < @validationCutoff"), conn))
+                        using (SQLiteCommand testingCommand = new SQLiteCommand(string.Format(sql, "`game_second` >= @trainingCutoff"), conn))
+                        {
+                            // Setup parameters
+                            trainingCommand.Parameters.AddWithValue("@trainingCutoff", trainingCutoff);
+                            trainingCommand.Parameters.AddWithValue("@validationCutoff", validationCutoff);
+                            validationCommand.Parameters.AddWithValue("@validationCutoff", validationCutoff);
+                            testingCommand.Parameters.AddWithValue("@trainingCutoff", trainingCutoff);
+
+                            SQLiteDataReader trainingReader = trainingCommand.ExecuteReader(); // Bootstrap these
+                            SQLiteDataReader validationReader = validationCommand.ExecuteReader();
+                            Stopwatch epochWatch = new Stopwatch();
+                            while (!(done && allTrained))
+                            {
+                                epochWatch.Restart();
+
+
+                                // Train one round
+                                // Don't train on the first epoch, so the initial random error can be compared
+                                if (epochsTrained != 0)
+                                {
+                                    for (int e = 0; e < trainingsPerEpoch; e++)
+                                    {
+                                        // If there's nothing left to read, then restart the reader
+                                        while (!trainingReader.Read())
+                                        {
+                                            trainingReader.Dispose();
+                                            allTrained = true; // All training instances have been used at least once
+                                            trainingReader = null;
+                                            trainingReader = trainingCommand.ExecuteReader();
+                                        }
+
+                                        // Read each feature from our database result
+                                        for (int i = 0; i < Features.Count; i++)
+                                        {
+                                            instance[i] = trainingReader.GetDouble(i);
+                                        }
+                                        // The target output is the last column in the row
+                                        Learner.TrainInstance(instance, Normalize(trainingReader.GetDouble(Features.Count)));
+                                        totalTrained++;
+                                    }
+                                }
+
+
+                                // Test the predictive accuracy on the entire validation set
+                                double sse = 0.0;
+                                for (int e = 0; e < validationsPerEpoch; e++)
+                                {
+                                    // If there's nothing left to read, then restart the reader
+                                    while (!validationReader.Read())
+                                    {
+                                        validationReader.Dispose();
+                                        validationReader = null;
+                                        validationReader = validationCommand.ExecuteReader();
+                                    }
+
+                                    for (int i = 0; i < Features.Count; i++)
+                                    {
+                                        instance[i] = validationReader.GetDouble(i);
+                                    }
+                                    // The target output is the last column in the row
+                                    double prediction = Learner.Predict(instance);
+                                    double target = Normalize(validationReader.GetDouble(Features.Count));
+                                    double error = target - prediction;
+                                    sse += error * error;
+                                    if (epochsTrained > 0)
+                                    {
+                                        //Console.WriteLine(" Instance:\n  {0}", string.Join("\n  ", Features.Zip(instance, (feature, value) => new Tuple<string, double>(feature, value))));
+                                        //Console.WriteLine(" Prediction: {0,3} Expected {1,3} Error {2,3}", Math.Round(UnNormalize(prediction)), Math.Round(UnNormalize(target)), Math.Round(UnNormalize(target) - UnNormalize(prediction)));
+                                        //log.WriteLine(" Prediction: {0,3} Expected {1,3} Error {2,3}", Math.Round(UnNormalize(prediction)), Math.Round(UnNormalize(target)), Math.Round(UnNormalize(target) - UnNormalize(prediction)));
+                                    }
+                                }
+                                double mse = sse / validationInstances;
+
+
+                                // Check for termination
+                                currentErrorWindow.Enqueue(mse);
+                                if (currentErrorWindow.Count > terminationWindowSize)
+                                {
+                                    double oldMse = currentErrorWindow.Dequeue();
+                                    previousErrorWindow.Enqueue(oldMse);
+                                    if (previousErrorWindow.Count > terminationWindowSize)
+                                    {
+                                        previousErrorWindow.Dequeue();
+                                    }
+                                }
+
+                                double currentAverage = currentErrorWindow.Average();
+                                double previousAverage = previousErrorWindow.Count() > 0 ? previousErrorWindow.Average() : double.MaxValue;
+
+                                if ((currentAverage >= previousAverage && mse < previousMSE) || currentAverage == previousAverage)
+                                {
+                                    done = true;
+                                }
+
+                                if (epochsTrained >= maxEpochs)
+                                {
+                                    done = true;
+                                }
+
+                                previousMSE = mse;
+
+
+                                // This epoch has completed
+                                epochWatch.Stop();
+                                //Console.WriteLine("{0}:{1} Training Accuracy (Epoch took {2:00}:{3:00}):\n  SSE: {4}\n  MSE: {5}", Card, epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds, sse, mse);
+
+                                //*
+                                // Test the predictive accuracy on the each data set
+                                //double trainingSSE = CalculateSSE(trainingCommand, Learner, instance);
+                                //double trainingMSE = trainingSSE / trainingInstances;
+                                //double validationSSE = CalculateSSE(validationCommand, Learner, instance);
+                                //double validationMSE = validationSSE / validationInstances;
+                                double validationSSE = sse;
+                                double validationMSE = mse;
+                                double testingSSE = CalculateSSE(testingCommand, Learner, instance);
+                                double testingMSE = testingSSE / testingInstances;
+
+                                log.WriteLine("{0} Epoch Status", Card);
+                                log.WriteLine(" Epoch {0} completed in {1:00}:{2:00}", epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds);
+                                log.WriteLine(" Trained on {0} instances total", totalTrained);
+                                //log.WriteLine(" SSE (training set):   {0:.000} ({1})", Math.Round(trainingSSE, 3), UnNormalize(trainingSSE));
+                                //log.WriteLine(" SSE (validation set): {0:.000} ({1})", Math.Round(validationSSE, 3), UnNormalize(validationSSE));
+                                //log.WriteLine(" SSE (testing set):    {0:.000} ({1})", Math.Round(testingSSE, 3), UnNormalize(testingSSE));
+                                //log.WriteLine(" MSE (training set):   {0:.000} ({1})", Math.Round(trainingMSE, 3), UnNormalize(trainingMSE));
+                                log.WriteLine(" MSE (validation set): {0:.000} ({1})", Math.Round(validationMSE, 3), UnNormalize(validationMSE));
+                                log.WriteLine(" MSE (testing set):    {0:.000} ({1})", Math.Round(testingMSE, 3), UnNormalize(testingMSE));
+                                log.Flush();
+                                //*/
+
+
+                                Console.WriteLine("{0} Epoch Status", Card);
+                                Console.WriteLine(" Epoch {0} completed in {1:00}:{2:00}", epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds);
+                                Console.WriteLine(" Trained on {0} instances total", totalTrained);
+                                //Console.WriteLine(" SSE (training set):   {0:.000} ({1})", Math.Round(trainingSSE, 3), UnNormalize(trainingSSE));
+                                //Console.WriteLine(" SSE (validation set): {0:.000} ({1})", Math.Round(validationSSE, 3), UnNormalize(validationSSE));
+                                //Console.WriteLine(" SSE (testing set):    {0:.000} ({1})", Math.Round(testingSSE, 3), UnNormalize(testingSSE));
+                                //Console.WriteLine(" MSE (training set):   {0:.000} ({1})", Math.Round(trainingMSE, 3), UnNormalize(trainingMSE));
+                                Console.WriteLine(" MSE (validation set): {0:.000} ({1})", Math.Round(validationMSE, 3), UnNormalize(validationMSE));
+                                Console.WriteLine(" MSE (testing set):    {0:.000} ({1})", Math.Round(testingMSE, 3), UnNormalize(testingMSE));
+
+                                //Console.WriteLine("{0}:{1} Training Accuracy (Epoch took {2:00}:{3:00}. {4} trained, {5} validated):\n  SSE: {6}\n  MSE: {7}", Card, epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds, epochSize, validationEpochSize, sse, mse);
+                                //Console.WriteLine("{0}:{6} Training Accuracy:\n    SSE: {7}\n    MSE: {1}\n   RMSE: {2}\n AvgErr: {3}\n StdDev: {4}\n AvgTgt: {5}", Card, mse, Math.Sqrt(mse), errors.Average(), errors.StdDev(), targets.Average(), epochsTrained, errors.Select(x => x * x).Sum());
+
+                                epochsTrained++;
+                            }
+                            trainingReader.Dispose();
+                            trainingReader = null;
                             validationReader.Dispose();
                             validationReader = null;
-                            // Reuse the same sql currently...
-                            validationReader = SQLReader(sql, "validation", conn);
-                        }
 
-                        for (int i = 0; i < Features.Count; i++)
-                        {
-                            instance[i] = validationReader.GetDouble(i);
-                        }
-                        // The target output is the last column in the row
-                        double prediction = Learner.Predict(instance);
-                        double target = Normalize(validationReader.GetDouble(Features.Count));
-                        double error = target - prediction;
-                        sse += error * error;
-                        //targets.Add(target);
-                        //errors.Add(error);
-                        //Console.WriteLine("Prediction: {0} {1} {2}", Math.Round(prediction, 3), Math.Round(target, 3), Math.Round(error, 3));
-                    }
-                    /*
-                    // Reuse the same sql currently...
-                    SQLForEach(sql, "validation", reader =>
-                    {
-                        for (int i = 0; i < Features.Count; i++)
-                        {
-                            instance[i] = reader.GetDouble(i);
-                        }
-                        // The target output is the last column in the row
-                        double prediction = Learner.Predict(instance);
-                        double target = Normalize(reader.GetDouble(Features.Count));
-                        double error = target - prediction;
-                        sse += error * error;
-                        //targets.Add(target);
-                        //errors.Add(error);
-                        Console.WriteLine("Prediction: {0} {1} {2}", Math.Round(prediction, 3), Math.Round(Normalize(reader.GetDouble(Features.Count)), 3), Math.Round(error, 3));
-                    });
-                     */
-                    double mse = sse / validationInstances;
-
-                    currentErrorWindow.Enqueue(mse);
-                    if (currentErrorWindow.Count > terminationWindowSize)
-                    {
-                        double oldMse = currentErrorWindow.Dequeue();
-                        previousErrorWindow.Enqueue(oldMse);
-                        if (previousErrorWindow.Count > terminationWindowSize)
-                        {
-                            previousErrorWindow.Dequeue();
-                        }
-                    }
-
-                    double currentAverage = currentErrorWindow.Average();
-                    double previousAverage = previousErrorWindow.Average();
-
-                    if ((currentAverage >= previousAverage && mse < previousMSE) || currentAverage == previousAverage)
-                    {
-                        done = true;
-                    }
-
-                    previousMSE = mse;
-
-                    epochWatch.Stop();
-
-                    Console.WriteLine("{0}:{1} Training Accuracy (Epoch took {2:00}:{3:00}):\n  SSE: {4}\n  MSE: {5}", Card, epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds, sse, mse);
-                    //Console.WriteLine("{0}:{1} Training Accuracy (Epoch took {2:00}:{3:00}. {4} trained, {5} validated):\n  SSE: {6}\n  MSE: {7}", Card, epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds, epochSize, validationEpochSize, sse, mse);
-
-                    //Console.WriteLine("{0}:{6} Training Accuracy:\n    SSE: {7}\n    MSE: {1}\n   RMSE: {2}\n AvgErr: {3}\n StdDev: {4}\n AvgTgt: {5}", Card, mse, Math.Sqrt(mse), errors.Average(), errors.StdDev(), targets.Average(), epochsTrained, errors.Select(x => x * x).Sum());
-
-                    epochsTrained++;
-                }
-                Console.WriteLine("{0} Training Complete\n Trained on {1} instances over {2} epochs", Card, trained, epochsTrained);
-                //Console.WriteLine("{0} Training Accuracy:\n    MSE: {1}\n   RMSE: {2}\n AvgErr: {3}\n StdDev: {4}\n AvgTgt: {5}\n   Inst: {6}", Card, mse, Math.Sqrt(mse), errors.Average(), errors.StdDev(), targets.Average(), totalInstances);
-
-                /*
-                using (SQLiteCommand command = new SQLiteCommand(sql, Connection))
-                {
-                    command.Parameters.AddWithValue("@card_bought", Card);
-                    command.Parameters.AddWithValue("@limit", trainingInstances);
-                    command.Parameters.AddWithValue("@offset", 0);
-
-                    using (SQLiteDataReader reader = command.ExecuteReader())
-                    {
-                        double[] instance = new double[Features.Count];
-                        while (reader.Read())
-                        {
-                            for (int i = 0; i < Features.Count; i++)
+                            // Report all the errors
                             {
-                                instance[i] = reader.GetDouble(i);
+                                // Test the predictive accuracy on the each data set
+                                double trainingSSE = CalculateSSE(trainingCommand, Learner, instance);
+                                double trainingMSE = trainingSSE / trainingInstances;
+                                double validationSSE = CalculateSSE(validationCommand, Learner, instance);
+                                double validationMSE = validationSSE / validationInstances;
+                                double testingSSE = CalculateSSE(testingCommand, Learner, instance);
+                                double testingMSE = testingSSE / testingInstances;
+
+                                //Console.WriteLine("{0} Training Complete\n Trained on {1} instances over {2} epochs", Card, totalTrained, epochsTrained);
+                                Console.WriteLine("{0} Trained (MSE: {1:.000} Training, {2:.000} Validation, {3:.000} Testing)", Card, Math.Round(trainingMSE, 3), Math.Round(validationMSE, 3), Math.Round(testingMSE, 3));
+                                log.WriteLine("{0} Training Complete", Card);
+                                log.WriteLine(" Trained on {0} instances over {1} epochs", totalTrained, epochsTrained);
+                                log.WriteLine(" SSE (training set):   {0:.000} ({1})", Math.Round(trainingSSE, 3), trainingSSE);
+                                log.WriteLine(" SSE (validation set): {0:.000} ({1})", Math.Round(validationSSE, 3), validationSSE);
+                                log.WriteLine(" SSE (testing set):    {0:.000} ({1})", Math.Round(testingSSE, 3), testingSSE);
+                                log.WriteLine(" MSE (training set):   {0:.000} ({1})", Math.Round(trainingMSE, 3), trainingMSE);
+                                log.WriteLine(" MSE (validation set): {0:.000} ({1})", Math.Round(validationMSE, 3), validationMSE);
+                                log.WriteLine(" MSE (testing set):    {0:.000} ({1})", Math.Round(testingMSE, 3), testingMSE);
                             }
-                            // The target output is the last column in the row
-                            Learner.TrainInstance(instance, reader.GetDouble(Features.Count));
                         }
-                        instance = null;
                     }
-                    Console.WriteLine("{0} Training Complete", Card);
-                }
-                 */
-                /*
-                using (SQLiteCommand command = new SQLiteCommand(sql, Connection))
-                {
-                    command.Parameters.AddWithValue("@card_bought", Card);
-                    using (SQLiteDataReader reader = command.ExecuteReader())
+
+                    using (StreamWriter file = new StreamWriter(String.Format("{0}\\{1}.json", Learner.Folder, Card), false))
                     {
-                        double[] instance = new double[Features.Count];
-                        List<double> targets = new List<double>(totalInstances);
-                        List<double> errors = new List<double>(totalInstances);
-                        double sse = 0.0;
-                        while (reader.Read())
-                        {
-                            for (int i = 0; i < Features.Count; i++)
-                            {
-                                instance[i] = reader.GetDouble(i);
-                            }
-                            // The target output is the last column in the row
-                            double prediction = Learner.Predict(instance);
-                            double error = reader.GetDouble(Features.Count) - prediction;
-                            sse += error * error;
-                            targets.Add(reader.GetDouble(Features.Count));
-                            errors.Add(error);
-                        }
-                        double mse = sse / totalInstances;
-                        Console.WriteLine("{0} Training Accuracy:\n    MSE: {1}\n   RMSE: {2}\n AvgErr: {3}\n StdDev: {4}\n AvgTgt: {5}\n   Inst: {6}", Card, mse, Math.Sqrt(mse), errors.Average(), errors.StdDev(), targets.Average(), totalInstances);
-                        instance = null;
+                        file.Write(Learner.Serialize());
                     }
+
+                    stopwatch.Stop();
+                    //Console.WriteLine("{0} Complete!\n Took {1} minutes, {2} seconds", Card, Math.Floor(stopwatch.Elapsed.TotalMinutes), stopwatch.Elapsed.Seconds);
+                    Console.WriteLine("{0}: Complete! (Took {1} minutes, {2} seconds)", Card, Math.Floor(stopwatch.Elapsed.TotalMinutes), stopwatch.Elapsed.Seconds);
+                    log.WriteLine("{0} Complete!", Card);
+                    log.WriteLine(" Took {0} minutes, {1} seconds", Math.Floor(stopwatch.Elapsed.TotalMinutes), stopwatch.Elapsed.Seconds);
                 }
-                 */
             }
-
-            stopwatch.Stop();
-            Console.WriteLine("{0} Complete!\n Took {1} minutes, {2} seconds", Card, Math.Floor(stopwatch.Elapsed.TotalMinutes), stopwatch.Elapsed.Seconds);
         }
 
         public double Normalize(double value)
         {
-            // Try normalizing to just raw win/lose value.
-            //return value > 0 ? 0.9 : 0.1;
             return (value - NormalizationMin) / (NormalizationMax - NormalizationMin);
-            //return value; // No normalization.
         }
 
-        private delegate void ReadRow(SQLiteDataReader reader);
-
-        /*
-        private void SQLForEach(string sql, string use, ReadRow rowReader, SQLiteConnection conn)
+        public double UnNormalize(double value)
         {
-            using (SQLiteCommand command = new SQLiteCommand(sql, conn))
+            return (value * (NormalizationMax - NormalizationMin)) + NormalizationMin;
+        }
+
+        public double CalculateSSE(SQLiteCommand command, DominionLearner learner, double[] instance)
+        {
+            using (SQLiteDataReader reader = command.ExecuteReader())
             {
-                command.Parameters.AddWithValue("@card_bought", Card);
-                command.Parameters.AddWithValue("@use", use);
-                using (SQLiteDataReader reader = command.ExecuteReader())
+                double sse = 0.0;
+                while (reader.Read())
                 {
-                    while (reader.Read())
+                    for (int i = 0; i < Features.Count; i++)
                     {
-                        rowReader(reader);
+                        instance[i] = reader.GetDouble(i);
                     }
+                    // The target output is the last column in the row
+                    double prediction = learner.Predict(instance);
+                    double target = Normalize(reader.GetDouble(Features.Count));
+                    double error = target - prediction;
+                    sse += error * error;
                 }
-            }
-        }
-        //*/
-
-        private SQLiteDataReader SQLReader(string sql, string use, SQLiteConnection conn)
-        {
-            using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-            {
-                //command.Parameters.AddWithValue("@card_bought", Card);
-                command.Parameters.AddWithValue("@use", use);
-                return command.ExecuteReader();
+                return sse;
             }
         }
     }

@@ -8,13 +8,13 @@ namespace DominionML_SQL
 {
     public static class LearnerFactory
     {
-        public static DominionLearner CreateDominionLearner(string card, IEnumerable<string> features)
+        public static DominionLearner CreateDominionLearner(string card, IList<string> features)
         {
-            return new BackpropagationLearner(card, features.Count(), 1);
+            return new BackpropagationLearner(card, features, 1);
         }
     }
 
-    public abstract class DominionLearner
+    public abstract class DominionLearner : IDisposable
     {
         public string Card { get; private set; }
 
@@ -27,8 +27,12 @@ namespace DominionML_SQL
 
         public abstract double Predict(double[] features);
 
+        public abstract string Folder { get; }
+
         public abstract string Serialize();
 
         public abstract void Load(string serialized);
+
+        public abstract void Dispose();
     }
 }

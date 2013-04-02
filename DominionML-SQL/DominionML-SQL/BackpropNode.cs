@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace DominionML_SQL
 {
-    public abstract class BackpropNode
+    public abstract class BackpropNode : IDisposable
     {
         public BackpropNetwork Network { get; private set; }
         //public static Random Rand = new Random();
@@ -59,6 +59,23 @@ namespace DominionML_SQL
         public abstract double Output { get; }
 
         public abstract double Error { get; }
+
+        public virtual void Serialize(StringBuilder builder)
+        {
+            builder.Append("{\"id\":");
+            builder.Append(Id);
+            builder.Append("}");
+        }
+
+        public void Dispose()
+        {
+            inputIndexes.Clear();
+            inputIndexes = null;
+            weights.Clear();
+            weights = null;
+            outputs.Clear();
+            outputs = null;
+        }
     }
 
     public class HiddenNode : BackpropNode
@@ -130,6 +147,15 @@ namespace DominionML_SQL
                 return error;
             }
         }
+        
+        public override void Serialize(StringBuilder builder)
+        {
+            builder.Append("{\"id\":");
+            builder.Append(Id);
+            builder.Append(",\"weights\":{");
+            builder.Append(string.Join(",", inputIndexes.Select(pair => string.Format("\"{0}\":{1}", pair.Key.Id, weights[pair.Value]))));
+            builder.Append("}}");
+        }
     }
 
     public class OutputNode : HiddenNode
@@ -189,14 +215,26 @@ namespace DominionML_SQL
                 return error;
             }
         }
+
+        public override void Serialize(StringBuilder builder)
+        {
+            builder.Append("{\"id\":");
+            builder.Append(Id);
+            builder.Append(",\"weights\":{");
+            builder.Append(string.Join(",", inputIndexes.Select(pair => string.Format("\"{0}\":{1}", pair.Key.Id, weights[pair.Value]))));
+            builder.Append("}}");
+        }
     }
 
     public class InputNode : BackpropNode
     {
-        public InputNode(BackpropNetwork network)
+        public string Label { get; private set; }
+
+        public InputNode(BackpropNetwork network, string label)
             : base(network)
         {
             //Console.WriteLine("InputNode: {0}", Id);
+            Label = label;
         }
 
         private double value;
@@ -213,6 +251,15 @@ namespace DominionML_SQL
         public override double Output { get { return Value; } }
 
         public override double Error { get { return 0.0; } }
+
+        public override void Serialize(StringBuilder builder)
+        {
+            builder.Append("{\"id\":");
+            builder.Append(Id);
+            builder.Append(",\"label\":\"");
+            builder.Append(Label);
+            builder.Append("\"}");
+        }
     }
 
     public class BiasNode : BackpropNode

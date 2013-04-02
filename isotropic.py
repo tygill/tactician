@@ -1,5 +1,6 @@
 from dominion import *
 import re
+import os.path
 
 # General Purpose
 
@@ -839,7 +840,7 @@ def abort_string(abort):
     else:
         return "Unknown Reason"
 
-class isotropic_parser:
+class IsotropicParser:
 
     def __init__(self):
         self.event_handlers = {}
@@ -865,7 +866,18 @@ class isotropic_parser:
     def read(self, filename):
         self.file = open(filename, 'rb')
         # Reset the game instance associated with this parser
-        self.game = dominion_game()
+        self.game = DominionGame()
+        
+        match = re.match(r'game-(?P<year>\d{4})(?P<month>\d{2})(?P<day>\d{2})-(?P<hour>\d{2})(?P<minute>\d{2})(?P<second>\d{2})-[\d\w]{8}\.html', os.path.basename(filename))
+        if match:
+            year = int(match.group('year'))
+            month = int(match.group('month'))
+            day = int(match.group('day'))
+            hour = int(match.group('hour'))
+            minute = int(match.group('minute'))
+            second = int(match.group('second'))
+            self.game.set_timestamp(year, month, day, hour, minute, second)
+            
         self.unhandled_lines = 0
         self.line_num = 0
         self.players = [] # cache list of players for regex player validation
@@ -1050,7 +1062,7 @@ class isotropic_parser:
             if match:
                 player = match.group('player')
                 cards = match.group('cards')
-                foreach_card(cards, lambda card: self.game.draw(card, player))
+                #foreach_card(cards, lambda card: self.game.draw(card, player))
             else:
                 self.unmatched_line(line, draw_hand_regex)
             
@@ -1208,6 +1220,6 @@ class isotropic_parser:
 
         
 if __name__ == '__main__':
-    parser = isotropic_parser()
+    parser = IsotropicParser()
     parser.read('test.html')
     

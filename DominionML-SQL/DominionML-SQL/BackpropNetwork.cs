@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace DominionML_SQL
 {
-    public class BackpropNetwork
+    public class BackpropNetwork : IDisposable
     {
         public delegate int HiddenLayerSize(int numInputs, int numOutputs, int layer, int numLayers);
 
@@ -45,9 +45,10 @@ namespace DominionML_SQL
             //Console.WriteLine("Momentum/Speed Up: {0}", SpeedUp);
         }
 
-        public void Init(int inputs, int outputs, HiddenLayerSize hiddenLayerSize = null, int layers = 1)
+        public void Init(IList<string> inputList, int outputs, HiddenLayerSize hiddenLayerSize = null, int layers = 1)
         {
-            hiddenLayerSize = hiddenLayerSize == null ? nInputs : hiddenLayerSize;
+            int inputs = inputList.Count();
+            hiddenLayerSize = hiddenLayerSize == null ? twoNInputs : hiddenLayerSize;
             inputNodes = new List<InputNode>(inputs);
             hiddenNodes = new List<List<HiddenNode>>(layers);
             outputNodes = new List<OutputNode>(outputs);
@@ -55,7 +56,7 @@ namespace DominionML_SQL
             // Create the input nodes
             for (int i = 0; i < inputs; i++)
             {
-                InputNode node = new InputNode(this);
+                InputNode node = new InputNode(this, inputList[i]);
                 // This will line up each element of the inputNodes list with a feature, ordered by index number.
                 inputNodes.Add(node);
             }
@@ -119,6 +120,46 @@ namespace DominionML_SQL
             return outputNodes[0].Output;
         }
 
+        public void Serialize(StringBuilder builder)
+        {
+            builder.Append("{\"bias\":[");
+            BiasNode.Serialize(builder);
+            builder.Append("],\"inputs\":[");
+            bool first = true;
+            foreach (InputNode inputNode in inputNodes)
+            {
+                if (!first)
+                {
+                    builder.Append(",");
+                }
+                first = false;
+                inputNode.Serialize(builder);
+            }
+            builder.Append("],\"hidden\":[");
+            first = true;
+            foreach (HiddenNode hiddenNode in hiddenNodes.SelectMany(list => list))
+            {
+                if (!first)
+                {
+                    builder.Append(",");
+                }
+                first = false;
+                hiddenNode.Serialize(builder);
+            }
+            builder.Append("],\"output\":[");
+            first = true;
+            foreach (OutputNode outputNode in outputNodes)
+            {
+                if (!first)
+                {
+                    builder.Append(",");
+                }
+                first = false;
+                outputNode.Serialize(builder);
+            }
+            builder.Append("]}");
+        }
+
 
         private void LoadInputs(double[] features)
         {
@@ -141,6 +182,34 @@ namespace DominionML_SQL
             // Tell each of the hidden and output nodes to train one step using whatever the current output values are through the network
             hiddenNodes.ForEach(list => list.ForEach(node => node.Train()));
             outputNodes.ForEach(node => node.Train());
+        }
+
+        public void Dispose()
+        {
+            BiasNode.Dispose();
+            BiasNode = null;
+            foreach (BackpropNode node in inputNodes)
+            {
+                node.Dispose();
+            }
+            inputNodes.Clear();
+            inputNodes = null;
+            foreach (List<HiddenNode> list in hiddenNodes)
+            {
+                foreach (BackpropNode node in list)
+                {
+                    node.Dispose();
+                }
+                list.Clear();
+            }
+            hiddenNodes.Clear();
+            hiddenNodes = null;
+            foreach (BackpropNode node in outputNodes)
+            {
+                node.Dispose();
+            }
+            outputNodes.Clear();
+            outputNodes = null;
         }
 
         // Properties used by the nodes to register themselves with the network
