@@ -84,7 +84,8 @@ def bin_actions_feature(actions):
 # Add the cards features
 for card in sorted(supply_cards):
     # Python lambda's make this need to be a separate function. That way, card is a new scope.
-    add_card_feature(card)
+    #add_card_feature(card)
+    pass
 add_feature(lambda game: game.get_num_players() / 6.0, "Number of Players")
 add_feature(lambda game: 1 if game.supply_contains_any(plus_action_cards) else 0, "+Action Cards in Supply?", [0, 1]) # +2 Action or more cards only. Chaining cards (+1 Action) don't count.
 add_feature(lambda game: 1 if game.supply_contains_any(plus_buy_cards) else 0, "+Buy Cards in Supply?", [0, 1])
@@ -92,6 +93,7 @@ add_feature(lambda game: 1 if game.supply_contains_any(drawing_cards) else 0, "D
 add_feature(lambda game: 1 if game.supply_contains_any(cursing_cards) else 0, "Cursing Cards in Supply?", [0, 1])
 add_feature(lambda game: 1 if game.supply_contains_any(trashing_cards) else 0, "Trashing Cards in Supply?", [0, 1])
 add_feature(lambda game: 1 if game.supply_contains_any(attack_cards) else 0, "Attack Cards in Supply?", [0, 1])
+add_feature(lambda game: 1 if game.supply_contains_any(potion_cards) else 0, "Potion Cards in Supply?", [0, 1])
 
 # Move context features
 # This is normalized by looking at the max in the 8 gb dataset. 61 was the max, so this should be good.
@@ -169,8 +171,8 @@ class FeatureExtractor:
             # Create the indexes
             sql = "CREATE INDEX IF NOT EXISTS card_bought_index ON instances (card_bought);"
             self.db.execute(sql)
-            sql = "CREATE INDEX IF NOT EXISTS use_index ON instances (use);"
-            self.db.execute(sql)
+            #sql = "CREATE INDEX IF NOT EXISTS use_index ON instances (use);"
+            #self.db.execute(sql)
             sql = "CREATE INDEX IF NOT EXISTS game_second_index ON instances (game_second);"
             self.db.execute(sql)
             

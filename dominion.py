@@ -20,6 +20,7 @@ cursing_cards = set()
 trashing_cards = set()
 attack_cards = set()
 supply_cards = set()
+potion_cards = set()
 
 victory_point_symbol = unichr(9660) # u"\u25BC"
 potion_cost_symbol = unichr(9673) # u"\u25C9"
@@ -777,7 +778,7 @@ class DominionGame:
         else:
             return 0
             
-def add_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
+def add_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True, potion=False):
     cards.add(card)
     if plural is None:
         # By default, the plural of a card is just an 's' added to the end
@@ -798,40 +799,42 @@ def add_card(card, plural = None, actions=False, buys=False, draws=False, curse=
         attack_cards.add(card)
     if supply:
         supply_cards.add(card)
+    if potion:
+        potion_cards.add(card)
 
-def add_action_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
+def add_action_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True, potion=False):
     action_cards.add(card)
-    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply, potion)
 
-def add_victory_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
+def add_victory_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True, potion=False):
     victory_cards.add(card)
-    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply, potion)
     
-def add_treasure_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
+def add_treasure_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True, potion=False):
     treasure_cards.add(card)
-    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply, potion)
 
-def add_curse_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
+def add_curse_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True, potion=False):
     curse_cards.add(card)
-    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply, potion)
 
-def add_victory_treasure_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
+def add_victory_treasure_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True, potion=False):
     victory_cards.add(card)
     treasure_cards.add(card)
-    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply, potion)
     
-def add_victory_action_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True):
+def add_victory_action_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True, potion=False):
     victory_cards.add(card)
     action_cards.add(card)
-    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
+    add_card(card, plural, actions, buys, draws, curse, trash, attack, supply, potion)
     
-def add_treasure_prize_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=False):
+def add_treasure_prize_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=False, potion=False):
     prize_cards.add(card)
-    add_treasure_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
+    add_treasure_card(card, plural, actions, buys, draws, curse, trash, attack, supply, potion)
     
-def add_action_prize_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=False):
+def add_action_prize_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=False, potion=False):
     prize_cards.add(card)
-    add_action_card(card, plural, actions, buys, draws, curse, trash, attack, supply)
+    add_action_card(card, plural, actions, buys, draws, curse, trash, attack, supply, potion)
 
 # Base
 add_action_card('Adventurer')
@@ -916,18 +919,18 @@ add_action_card('Warehouse', draws=True) # This doesn't let you have more cards 
 add_action_card('Wharf', 'Wharves', draws=True, buys=True)
 
 # Alchemy
-add_action_card('Alchemist', draws=True)
-add_action_card('Apothecary', 'Apothecaries')
+add_action_card('Alchemist', draws=True, potion=True)
+add_action_card('Apothecary', 'Apothecaries', potion=True)
 add_action_card('Apprentice', draws=True, trash=True)
-add_action_card('Familiar', attack=True, curse=True)
-add_action_card('Golem', actions=True) # It lets you play multiple actions in a single turn, so....I think I'll try counting this here.
+add_action_card('Familiar', attack=True, curse=True, potion=True)
+add_action_card('Golem', actions=True, potion=True) # It lets you play multiple actions in a single turn, so....I think I'll try counting this here.
 add_action_card('Herbalist')
-add_treasure_card('Philosopher\'s Stone')
-add_action_card('Possession')
-add_action_card('Scrying Pool', draws=True, attack=True)
-add_action_card('Transmute', trash=True)
-add_action_card('University', 'Universities', actions=True)
-add_victory_card('Vineyard')
+add_treasure_card('Philosopher\'s Stone', potion=True)
+add_action_card('Possession', potion=True)
+add_action_card('Scrying Pool', draws=True, attack=True, potion=True)
+add_action_card('Transmute', trash=True, potion=True)
+add_action_card('University', 'Universities', actions=True, potion=True)
+add_victory_card('Vineyard', potion=True)
 
 # Prosperity
 add_treasure_card('Bank')

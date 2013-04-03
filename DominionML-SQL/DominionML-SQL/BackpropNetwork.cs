@@ -26,6 +26,7 @@ namespace DominionML_SQL
         public double LearningRate { get; private set; }
         public double SpeedUp { get; private set; }
         public double MaxInitialWeight { get; private set; }
+        public double[] Boosts { get; private set; }
 
 
         private List<InputNode> inputNodes;
@@ -45,9 +46,10 @@ namespace DominionML_SQL
             //Console.WriteLine("Momentum/Speed Up: {0}", SpeedUp);
         }
 
-        public void Init(IList<string> inputList, int outputs, HiddenLayerSize hiddenLayerSize = null, int layers = 1)
+        public void Init(IList<string> inputList, double[] boosts, int outputs = 1, HiddenLayerSize hiddenLayerSize = null, int layers = 1)
         {
             int inputs = inputList.Count();
+            Boosts = boosts;
             hiddenLayerSize = hiddenLayerSize == null ? twoNInputs : hiddenLayerSize;
             inputNodes = new List<InputNode>(inputs);
             hiddenNodes = new List<List<HiddenNode>>(layers);
@@ -56,7 +58,7 @@ namespace DominionML_SQL
             // Create the input nodes
             for (int i = 0; i < inputs; i++)
             {
-                InputNode node = new InputNode(this, inputList[i]);
+                InputNode node = new InputNode(this, inputList[i], boosts[i]);
                 // This will line up each element of the inputNodes list with a feature, ordered by index number.
                 inputNodes.Add(node);
             }

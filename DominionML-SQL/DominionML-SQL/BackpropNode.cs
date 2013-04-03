@@ -60,6 +60,8 @@ namespace DominionML_SQL
 
         public abstract double Error { get; }
 
+        public abstract double Boost { get; }
+
         public virtual void Serialize(StringBuilder builder)
         {
             builder.Append("{\"id\":");
@@ -111,7 +113,7 @@ namespace DominionML_SQL
             foreach (KeyValuePair<BackpropNode, int> pair in inputIndexes)
             {
                 double delta = LearningRate * pair.Key.Output * Error;
-                weights[pair.Value] += delta + SpeedUp * previousDelta; // SpeedUp * previousDelta is our momentum
+                weights[pair.Value] += (delta + SpeedUp * previousDelta) * pair.Key.Boost; // SpeedUp * previousDelta is our momentum
                 previousDelta = delta;
                 //Console.WriteLine("{0}->{1} Weight: {2} Delta: {3}", pair.Key.Id, Id, weights[pair.Value], delta);
             }
@@ -147,6 +149,8 @@ namespace DominionML_SQL
                 return error;
             }
         }
+
+        public override double Boost { get { return 1.0; } }
         
         public override void Serialize(StringBuilder builder)
         {
@@ -230,11 +234,12 @@ namespace DominionML_SQL
     {
         public string Label { get; private set; }
 
-        public InputNode(BackpropNetwork network, string label)
+        public InputNode(BackpropNetwork network, string label, double boost)
             : base(network)
         {
             //Console.WriteLine("InputNode: {0}", Id);
             Label = label;
+            boostVal = boost;
         }
 
         private double value;
@@ -252,6 +257,9 @@ namespace DominionML_SQL
 
         public override double Error { get { return 0.0; } }
 
+        private double boostVal;
+        public override double Boost { get { return boostVal; } }
+        
         public override void Serialize(StringBuilder builder)
         {
             builder.Append("{\"id\":");
@@ -273,5 +281,7 @@ namespace DominionML_SQL
         public override double Output { get { return 1.0; } }
 
         public override double Error { get { throw new NotImplementedException(); } }
+
+        public override double Boost { get { return 1.0; } }
     }
 }

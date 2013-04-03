@@ -8,9 +8,9 @@ namespace DominionML_SQL
 {
     public static class LearnerFactory
     {
-        public static DominionLearner CreateDominionLearner(string card, IList<string> features)
+        public static DominionLearner CreateDominionLearner(string card, IList<string> features, double[] boosts)
         {
-            return new BackpropagationLearner(card, features, 1);
+            return new BackpropagationLearner(card, features, boosts);
         }
     }
 

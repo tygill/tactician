@@ -199,7 +199,7 @@ namespace DominionML_SQL
             AddVictoryCard("Estate");
 
             AddCard("Curse", curse: true);
-
+            
             // Promo Cards (I don"t know if Stash is used, but the others are);
             AddTreasureCard("Stash", "Stashes");
             AddActionCard("Envoy", "Envoys", draws: true);
@@ -211,7 +211,7 @@ namespace DominionML_SQL
         private static void AddCard(string name, string plural = null, bool action = false, bool victory = false, bool treasure = false, bool curse = false, bool actions = false, bool buys = false, bool draws = false, bool curses = false, bool trashes = false, bool attack = false, bool supply = true, bool prize = false)
         {
             Card card = new Card(name, plural, action, victory, treasure, curse, actions, buys, draws, curses, trashes, attack, supply, prize);
-            Cards.Add(Regex.Replace(card.Name, @"[\W]+", "").Replace(' ', '_'), card);
+            Cards.Add(card.Name.Replace("'", "").Replace(' ', '_'), card);
         }
 
         private static void AddActionCard(string name, string plural = null, bool action = true, bool victory = false, bool treasure = false, bool curse = false, bool actions = false, bool buys = false, bool draws = false, bool curses = false, bool trashes = false, bool attack = false, bool supply = true, bool prize = false)
@@ -231,9 +231,11 @@ namespace DominionML_SQL
 
         public static Card GetCard(string name)
         {
-            if (Cards.ContainsKey(name))
+            //string key = Regex.Replace(name, @"[\W ]+", "").Replace(' ', '_');
+            string key = name.Replace("'", "").Replace(' ', '_');
+            if (Cards.ContainsKey(key))
             {
-                return Cards[name];
+                return Cards[key];
             }
             else
             {

@@ -21,6 +21,7 @@ namespace DominionML_SQL
             double validationPercent = args.Contains("-v") ? double.Parse(args[argList.IndexOf("-v") + 1]) : 0.3;
             bool recalculateOutputMinMax = args.Contains("-o");
             bool recalculateInputMinMax = args.Contains("-i");
+            bool boost = !args.Contains("-nb");
 
             Console.WriteLine("Parameters: <> means argument, = means default value");
             Console.WriteLine(" -f <file=test.db3>    Use database file");
@@ -33,6 +34,7 @@ namespace DominionML_SQL
                               "                       (otherwise, the precomputed values are used)");
             Console.WriteLine(" -i                    Recalculate the normalization min/max for each input\n" +
                               "                       feature (otherwise, precomputed values are used)");
+            Console.WriteLine(" -nb                   Disable boosting of rare features");
 
             // Get the global properties from the database before starting all the subtasks.
             // Each subtask will initiate its own memory database.
@@ -295,25 +297,26 @@ namespace DominionML_SQL
                 // Get the list of cards that should be trained
                 cards = GetCards(conn);
                 Random rand = new Random();
-                cards = cards.OrderBy(card => rand.Next()).Take(1).ToList(); // Limit it to a single card for testing
-                cards.Clear();
-                cards.Add("Silver");
+                //cards = cards.OrderBy(card => rand.Next()).Take(1).ToList(); // Limit it to a single card for testing
+                //cards.Clear();
+                //cards.Add("None");
             }
 
             // Create each of the tasks
             DominionLearnerTask[] learnerTasks = new DominionLearnerTask[cards.Count];
-            Task[] tasks = new Task[cards.Count];
+            Task<TaskResult>[] tasks = new Task<TaskResult>[cards.Count];
             for (int i = 0; i < cards.Count; i++)
             {
-                learnerTasks[i] = new DominionLearnerTask(cards[i], features, file, trainingPercent, validationPercent, min, max, featureNormalizationMins, featureNormalizationMaxs);
-                tasks[i] = new Task(learnerTasks[i].RunTask);
+                learnerTasks[i] = new DominionLearnerTask(cards[i], features, file, trainingPercent, validationPercent, min, max, boost, featureNormalizationMins, featureNormalizationMaxs);
+                tasks[i] = new Task<TaskResult>(learnerTasks[i].RunTask);
             }
 
             // Start running some tasks
             int concurrentTasks = Math.Min(System.Environment.ProcessorCount, cards.Count);
             int nextTaskToRun = concurrentTasks;
-            Action<Task> runNextTaskLoop = null;
-            Action<Task> runNextTask = task => {
+            Action<Task<TaskResult>> runNextTaskLoop = null;
+            Action<Task<TaskResult>> runNextTask = task =>
+            {
                 if (nextTaskToRun < tasks.Length)
                 {
                     tasks[nextTaskToRun].Start();
@@ -330,6 +333,13 @@ namespace DominionML_SQL
 
             // Wait for all of them to run
             Task.WaitAll(tasks);
+
+            Console.WriteLine("All Tasks Complete!");
+            TaskResult finalResult;
+            foreach (Task<TaskResult> task in tasks)
+            {
+                finalResult.Add(task.Result);
+            }
         }
 
         // These are the hard coded, known non-feature column names.
@@ -354,6 +364,32 @@ namespace DominionML_SQL
                 }
             }
             return cards;
+        }
+    }
+
+    public struct TaskResult
+    {
+        public double TrainingSSE { get; set; }
+        public double TrainingMSE { get; set; }
+        public double TrainingInstances { get; set; }
+        public double ValidationSSE { get; set; }
+        public double ValidationMSE { get; set; }
+        public double ValidationInstances { get; set; }
+        public double TestingSSE { get; set; }
+        public double TestingMSE { get; set; }
+        public double TestingInstances { get; set; }
+
+        public void Add(TaskResult other)
+        {
+            TrainingSSE += other.TrainingSSE;
+            TrainingMSE += other.TrainingMSE;
+            TrainingInstances += other.TrainingInstances;
+            ValidationSSE += other.ValidationSSE;
+            ValidationMSE += other.ValidationMSE;
+            ValidationInstances += other.ValidationInstances;
+            TestingSSE += other.TestingSSE;
+            TestingMSE += other.TestingMSE;
+            TestingInstances += other.TestingInstances;
         }
     }
 

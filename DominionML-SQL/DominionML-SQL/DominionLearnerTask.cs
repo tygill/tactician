@@ -14,6 +14,9 @@ namespace DominionML_SQL
     {
         public string Card { get; private set; }
         public IList<string> Features { get; private set; }
+        public double[] Boosts { get; private set; }
+        public bool Boost { get; private set; }
+        public double BoostValue { get; private set; }
         public double TrainingPercent { get; private set; }
         public double ValidationPercent { get; private set; }
         public double NormalizationMin { get; private set; }
@@ -22,32 +25,28 @@ namespace DominionML_SQL
         public IDictionary<string, double> FeatureNormalizationMaxs { get; private set; }
         private string DatabaseFile;
 
-        public DominionLearnerTask(string card, IList<string> features, string dbFile, double trainingPercent, double validationPercent, double min, double max, IDictionary<string, double> featureMins, IDictionary<string, double> featureMaxs)
+        public DominionLearnerTask(string card, IList<string> features, string dbFile, double trainingPercent, double validationPercent, double min, double max, bool boost, IDictionary<string, double> featureMins, IDictionary<string, double> featureMaxs)
         {
             Card = card;
             TrainingPercent = trainingPercent;
             ValidationPercent = validationPercent;
             NormalizationMin = min;
             NormalizationMax = max;
-            Features = new List<string>(features);
+            // Prune out some features that we don't want to use
+            Features = features
+                .Where(name =>
+                    !name.Contains("_in_supply") || name.Contains("_cards_in_supply"))
+                .Where(name =>
+                    !name.Contains("_in_player_deck") ||
+                    name ==
+                        string.Format("{0}_in_player_deck",
+                            Card != "None"
+                                ? Dominion.GetCard(Card).Plural.Replace("'", "").Replace(' ', '_').ToLowerInvariant()
+                                : "none"))
+                .ToList();
             DatabaseFile = dbFile;
             FeatureNormalizationMins = featureMins;
             FeatureNormalizationMaxs = featureMaxs;
-        }
-
-        public void RunTask()
-        {
-            Stopwatch stopwatch = Stopwatch.StartNew();
-
-            Console.WriteLine("{0}: Beginning Training", Card);
-
-            // Prune out some features that we don't want to use
-            Features = Features.Where(name => !name.Contains("_in_supply") || name.Contains("_cards_in_supply")).Where(name => !name.Contains("_in_player_deck") || name == string.Format("{0}_in_player_deck", Regex.Replace(Dominion.GetCard(Card).Plural, @"[\W]+", "").Replace(' ', '_').ToLowerInvariant())).ToList();
-            //foreach (string name in Features)
-            //{
-            //    Console.WriteLine("{0}", name);
-            //}
-
 
             // How likely is a particular card in a given game? This will be used to boost features that are only in a specific game.
             double likelihood = 0.0;
@@ -57,10 +56,52 @@ namespace DominionML_SQL
                     likelihood += 1.0 / (Dominion.Cards.Count() - i);
                 }
             }
-            Console.WriteLine("Likelihood: {0}", likelihood);
+            //Console.WriteLine("Likelihood: {0}", likelihood);
+
+            Boost = boost;
+            BoostValue = 1.0 / likelihood;
+            Boosts = new double[Features.Count];
+            {
+                for (int i = 0; i < Features.Count; i++)
+                {
+                    if (Boost)
+                    {
+                        Boosts[i] = GetFeatureBoost(Features[i]);
+                    }
+                    else
+                    {
+                        Boosts[i] = 1.0;
+                    }
+                }
+            }
+            //Console.WriteLine("Boosting: {0}", string.Join(",", Boosts));
 
 
-            using (DominionLearner Learner = LearnerFactory.CreateDominionLearner(Card, Features))
+        }
+
+        private double GetFeatureBoost(string feature)
+        {
+            if (feature.Contains("_acquired"))
+            {
+                if (feature != "colonies_acquired" && feature != "duchies_acquired" && feature != "estates_acquired" && feature != "provinces_acquired")
+                {
+                    return BoostValue;
+                }
+            }
+
+            // Default return
+            return 1.0;
+        }
+
+        public TaskResult RunTask()
+        {
+            Stopwatch stopwatch = Stopwatch.StartNew();
+
+            Console.WriteLine("{0}: Beginning Training", Card);
+
+            TaskResult result;
+
+            using (DominionLearner Learner = LearnerFactory.CreateDominionLearner(Card, Features, Boosts))
             {
                 Directory.CreateDirectory(Learner.Folder);
 
@@ -112,7 +153,7 @@ namespace DominionML_SQL
                         int testingInstances = 0;
                         // Using the second field (0-60) as the set divider gives these splits
                         double trainingCutoff = TrainingPercent * 60;
-                        double validationCutoff = ValidationPercent * trainingCutoff;
+                        double validationCutoff = ValidationPercent * trainingCutoff;;
                         // [<0> Validation <validationCutof> Training <trainingCutoff> Testing<60>]
                         sql = @"SELECT COUNT(*) FROM `instances` WHERE `game_second` >= @validationCutoff AND `game_second` < @trainingCutoff;";
                         using (SQLiteCommand command = new SQLiteCommand(sql, conn))
@@ -134,7 +175,15 @@ namespace DominionML_SQL
                             testingInstances = Convert.ToInt32(command.ExecuteScalar());
                         }
                         totalInstances = trainingInstances + validationInstances + testingInstances;
+                        result.TrainingInstances = trainingInstances;
+                        result.ValidationInstances = validationInstances;
+                        result.TestingInstances = testingInstances;
                         log.WriteLine("{0}: {1} Instances ({2} training, {3} validation, {4} testing)", Card, totalInstances, trainingInstances, validationInstances, testingInstances);
+
+                        if (Boost)
+                        {
+                            log.WriteLine("Using boosting on rare features (boost value: {0})", BoostValue);
+                        }
 
 
                         // Epoch status
@@ -159,6 +208,7 @@ namespace DominionML_SQL
                         uint totalTrained = 0;
                         bool allTrained = false;
                         bool done = false;
+                        bool averagePassed = false;
                         double previousMSE = double.MaxValue;
                         sql = string.Format(@"SELECT `{0}`, `player_final_score` FROM `instances` WHERE {{0}} ORDER BY RANDOM();", string.Join("`, `", Features));
                         using (SQLiteCommand trainingCommand = new SQLiteCommand(string.Format(sql, "`game_second` >= @validationCutoff AND `game_second` < @trainingCutoff"), conn))
@@ -252,7 +302,12 @@ namespace DominionML_SQL
                                 double currentAverage = currentErrorWindow.Average();
                                 double previousAverage = previousErrorWindow.Count() > 0 ? previousErrorWindow.Average() : double.MaxValue;
 
-                                if ((currentAverage >= previousAverage && mse < previousMSE) || currentAverage == previousAverage)
+                                if (currentAverage >= previousAverage)
+                                {
+                                    averagePassed = true;
+                                }
+
+                                if ((averagePassed && mse < previousMSE) || currentAverage == previousAverage)
                                 {
                                     done = true;
                                 }
@@ -277,31 +332,31 @@ namespace DominionML_SQL
                                 //double validationMSE = validationSSE / validationInstances;
                                 double validationSSE = sse;
                                 double validationMSE = mse;
-                                double testingSSE = CalculateSSE(testingCommand, Learner, instance);
-                                double testingMSE = testingSSE / testingInstances;
+                                //double testingSSE = CalculateSSE(testingCommand, Learner, instance);
+                                //double testingMSE = testingSSE / testingInstances;
 
                                 log.WriteLine("{0} Epoch Status", Card);
                                 log.WriteLine(" Epoch {0} completed in {1:00}:{2:00}", epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds);
                                 log.WriteLine(" Trained on {0} instances total", totalTrained);
-                                //log.WriteLine(" SSE (training set):   {0:.000} ({1})", Math.Round(trainingSSE, 3), UnNormalize(trainingSSE));
-                                //log.WriteLine(" SSE (validation set): {0:.000} ({1})", Math.Round(validationSSE, 3), UnNormalize(validationSSE));
-                                //log.WriteLine(" SSE (testing set):    {0:.000} ({1})", Math.Round(testingSSE, 3), UnNormalize(testingSSE));
-                                //log.WriteLine(" MSE (training set):   {0:.000} ({1})", Math.Round(trainingMSE, 3), UnNormalize(trainingMSE));
-                                log.WriteLine(" MSE (validation set): {0:.000} ({1})", Math.Round(validationMSE, 3), UnNormalize(validationMSE));
-                                log.WriteLine(" MSE (testing set):    {0:.000} ({1})", Math.Round(testingMSE, 3), UnNormalize(testingMSE));
+                                //log.WriteLine(" SSE (training set):   {0:.000} ({1:.000})", Math.Round(trainingSSE, 3), Math.Round(UnNormalize(trainingSSE), 3));
+                                //log.WriteLine(" SSE (validation set): {0:.000} ({1:.000})", Math.Round(validationSSE, 3), Math.Round(UnNormalize(validationSSE), 3));
+                                //log.WriteLine(" SSE (testing set):    {0:.000} ({1:.000})", Math.Round(testingSSE, 3), Math.Round(UnNormalize(testingSSE), 3));
+                                //log.WriteLine(" MSE (training set):   {0:.000} ({1:.000})", Math.Round(trainingMSE, 3), Math.Round(UnNormalize(trainingMSE), 3));
+                                log.WriteLine(" MSE (validation set): {0:.000} ({1:.000})", Math.Round(validationMSE, 3), Math.Round(UnNormalize(validationMSE), 3));
+                                //log.WriteLine(" MSE (testing set):    {0:.000} ({1:.000})", Math.Round(testingMSE, 3), Math.Round(UnNormalize(testingMSE), 3));
                                 log.Flush();
                                 //*/
 
 
-                                Console.WriteLine("{0} Epoch Status", Card);
-                                Console.WriteLine(" Epoch {0} completed in {1:00}:{2:00}", epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds);
-                                Console.WriteLine(" Trained on {0} instances total", totalTrained);
-                                //Console.WriteLine(" SSE (training set):   {0:.000} ({1})", Math.Round(trainingSSE, 3), UnNormalize(trainingSSE));
-                                //Console.WriteLine(" SSE (validation set): {0:.000} ({1})", Math.Round(validationSSE, 3), UnNormalize(validationSSE));
-                                //Console.WriteLine(" SSE (testing set):    {0:.000} ({1})", Math.Round(testingSSE, 3), UnNormalize(testingSSE));
-                                //Console.WriteLine(" MSE (training set):   {0:.000} ({1})", Math.Round(trainingMSE, 3), UnNormalize(trainingMSE));
-                                Console.WriteLine(" MSE (validation set): {0:.000} ({1})", Math.Round(validationMSE, 3), UnNormalize(validationMSE));
-                                Console.WriteLine(" MSE (testing set):    {0:.000} ({1})", Math.Round(testingMSE, 3), UnNormalize(testingMSE));
+                                //Console.WriteLine("{0} Epoch Status", Card);
+                                //Console.WriteLine(" Epoch {0} completed in {1:00}:{2:00}", epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds);
+                                //Console.WriteLine(" Trained on {0} instances total", totalTrained);
+                                //Console.WriteLine(" SSE (training set):   {0:.000} ({1:.000})", Math.Round(trainingSSE, 3), Math.Round(UnNormalize(trainingSSE), 3));
+                                //Console.WriteLine(" SSE (validation set): {0:.000} ({1:.000})", Math.Round(validationSSE, 3), Math.Round(UnNormalize(validationSSE), 3));
+                                //Console.WriteLine(" SSE (testing set):    {0:.000} ({1:.000})", Math.Round(testingSSE, 3), Math.Round(UnNormalize(testingSSE), 3));
+                                //Console.WriteLine(" MSE (training set):   {0:.000} ({1:.000})", Math.Round(trainingMSE, 3), Math.Round(UnNormalize(trainingMSE), 3));
+                                //Console.WriteLine(" MSE (validation set): {0:.000} ({1:.000})", Math.Round(validationMSE, 3), Math.Round(UnNormalize(validationMSE), 3));
+                                //Console.WriteLine(" MSE (testing set):    {0:.000} ({1:.000})", Math.Round(testingMSE, 3), Math.Round(UnNormalize(testingMSE), 3));
 
                                 //Console.WriteLine("{0}:{1} Training Accuracy (Epoch took {2:00}:{3:00}. {4} trained, {5} validated):\n  SSE: {6}\n  MSE: {7}", Card, epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds, epochSize, validationEpochSize, sse, mse);
                                 //Console.WriteLine("{0}:{6} Training Accuracy:\n    SSE: {7}\n    MSE: {1}\n   RMSE: {2}\n AvgErr: {3}\n StdDev: {4}\n AvgTgt: {5}", Card, mse, Math.Sqrt(mse), errors.Average(), errors.StdDev(), targets.Average(), epochsTrained, errors.Select(x => x * x).Sum());
@@ -316,23 +371,24 @@ namespace DominionML_SQL
                             // Report all the errors
                             {
                                 // Test the predictive accuracy on the each data set
-                                double trainingSSE = CalculateSSE(trainingCommand, Learner, instance);
-                                double trainingMSE = trainingSSE / trainingInstances;
-                                double validationSSE = CalculateSSE(validationCommand, Learner, instance);
-                                double validationMSE = validationSSE / validationInstances;
-                                double testingSSE = CalculateSSE(testingCommand, Learner, instance);
-                                double testingMSE = testingSSE / testingInstances;
+                                result.TrainingSSE = CalculateSSE(trainingCommand, Learner, instance);
+                                result.TrainingMSE = result.TrainingSSE / trainingInstances;
+                                result.ValidationSSE = CalculateSSE(validationCommand, Learner, instance);
+                                result.ValidationMSE = result.ValidationSSE / validationInstances;
+                                result.TestingSSE = CalculateSSE(testingCommand, Learner, instance);
+                                result.TestingMSE = result.TestingSSE / testingInstances;
 
                                 //Console.WriteLine("{0} Training Complete\n Trained on {1} instances over {2} epochs", Card, totalTrained, epochsTrained);
-                                Console.WriteLine("{0} Trained (MSE: {1:.000} Training, {2:.000} Validation, {3:.000} Testing)", Card, Math.Round(trainingMSE, 3), Math.Round(validationMSE, 3), Math.Round(testingMSE, 3));
+                                Console.WriteLine("{0} Trained (MSE: {1:.000} Training, {2:.000} Validation, {3:.000} Testing)", Card, Math.Round(result.TrainingMSE, 3), Math.Round(result.ValidationMSE, 3), Math.Round(result.TestingMSE, 3));
+                                Console.WriteLine("{0} Trained (Score MSE: {1:.000} Training, {2:.000} Validation, {3:.000} Testing)", Card, Math.Round(UnNormalize(result.TrainingMSE), 3), Math.Round(UnNormalize(result.ValidationMSE), 3), Math.Round(UnNormalize(result.TestingMSE), 3));
                                 log.WriteLine("{0} Training Complete", Card);
                                 log.WriteLine(" Trained on {0} instances over {1} epochs", totalTrained, epochsTrained);
-                                log.WriteLine(" SSE (training set):   {0:.000} ({1})", Math.Round(trainingSSE, 3), trainingSSE);
-                                log.WriteLine(" SSE (validation set): {0:.000} ({1})", Math.Round(validationSSE, 3), validationSSE);
-                                log.WriteLine(" SSE (testing set):    {0:.000} ({1})", Math.Round(testingSSE, 3), testingSSE);
-                                log.WriteLine(" MSE (training set):   {0:.000} ({1})", Math.Round(trainingMSE, 3), trainingMSE);
-                                log.WriteLine(" MSE (validation set): {0:.000} ({1})", Math.Round(validationMSE, 3), validationMSE);
-                                log.WriteLine(" MSE (testing set):    {0:.000} ({1})", Math.Round(testingMSE, 3), testingMSE);
+                                log.WriteLine(" SSE (training set):   {0:.000} ({1:.000})", Math.Round(result.TrainingSSE, 3), Math.Round(UnNormalize(result.TrainingSSE), 3));
+                                log.WriteLine(" SSE (validation set): {0:.000} ({1:.000})", Math.Round(result.ValidationSSE, 3), Math.Round(UnNormalize(result.ValidationSSE), 3));
+                                log.WriteLine(" SSE (testing set):    {0:.000} ({1:.000})", Math.Round(result.TestingSSE, 3), Math.Round(UnNormalize(result.TestingSSE), 3));
+                                log.WriteLine(" MSE (training set):   {0:.000} ({1:.000})", Math.Round(result.TrainingMSE, 3), Math.Round(UnNormalize(result.TrainingMSE), 3));
+                                log.WriteLine(" MSE (validation set): {0:.000} ({1:.000})", Math.Round(result.ValidationMSE, 3), Math.Round(UnNormalize(result.ValidationMSE), 3));
+                                log.WriteLine(" MSE (testing set):    {0:.000} ({1:.000})", Math.Round(result.TestingMSE, 3), Math.Round(UnNormalize(result.TestingMSE), 3));
                             }
                         }
                     }
@@ -349,6 +405,8 @@ namespace DominionML_SQL
                     log.WriteLine(" Took {0} minutes, {1} seconds", Math.Floor(stopwatch.Elapsed.TotalMinutes), stopwatch.Elapsed.Seconds);
                 }
             }
+
+            return result;
         }
 
         public double Normalize(double value)
