@@ -30,20 +30,20 @@ class Feature:
         self.func = func
         self.values = values
         
-    def extract(self, game):
-        return self.func(game)
+    def extract(self, game, bought):
+        return self.func(game, bought)
 
 def add_feature(func, name, values = 'REAL'):
     Feature.features.append(Feature(name, func, values))
     
 def add_card_feature(card):
-    add_feature(lambda game: 1 if game.is_card_in_supply(card) else 0, '{0} in Supply?'.format(card), [0, 1])
+    add_feature(lambda game, bought: 1 if game.is_card_in_supply(card) else 0, '{0} in Supply?'.format(card), [0, 1])
     
-def add_card_bought_feature(card):
-    add_feature(lambda game: game.get_card_acquired_count(card) / game.card_initial_supply(card), "{0} Acquired".format(pluralize_card(card)))
+def add_card_acquired_feature(card):
+    add_feature(lambda game, bought: game.get_card_acquired_count(card) / game.card_initial_supply(card), "{0} Acquired".format(pluralize_card(card)))
     
 def add_my_card_feature(card):
-    add_feature(lambda game: game.get_player(game.possessor).get_card_count(card) / game.card_initial_supply(card), "{0} In Player Deck".format(pluralize_card(card)))
+    add_feature(lambda game, bought: game.get_player(game.possessor).get_card_count(card) / game.card_initial_supply(card), "{0} In Player Deck".format(pluralize_card(card)))
     
 # Binners
 # Bins money to 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12+
@@ -86,57 +86,60 @@ for card in sorted(supply_cards):
     # Python lambda's make this need to be a separate function. That way, card is a new scope.
     #add_card_feature(card)
     pass
-add_feature(lambda game: game.get_num_players() / 6.0, "Number of Players")
-add_feature(lambda game: 1 if game.supply_contains_any(plus_action_cards) else 0, "+Action Cards in Supply?", [0, 1]) # +2 Action or more cards only. Chaining cards (+1 Action) don't count.
-add_feature(lambda game: 1 if game.supply_contains_any(plus_buy_cards) else 0, "+Buy Cards in Supply?", [0, 1])
-add_feature(lambda game: 1 if game.supply_contains_any(drawing_cards) else 0, "Drawing Cards in Supply?", [0, 1]) # +2 Cards or more only. 
-add_feature(lambda game: 1 if game.supply_contains_any(cursing_cards) else 0, "Cursing Cards in Supply?", [0, 1])
-add_feature(lambda game: 1 if game.supply_contains_any(trashing_cards) else 0, "Trashing Cards in Supply?", [0, 1])
-add_feature(lambda game: 1 if game.supply_contains_any(attack_cards) else 0, "Attack Cards in Supply?", [0, 1])
-add_feature(lambda game: 1 if game.supply_contains_any(potion_cards) else 0, "Potion Cards in Supply?", [0, 1])
+add_feature(lambda game, bought: game.get_num_players() / 6.0, "Number of Players")
+add_feature(lambda game, bought: 1 if game.supply_contains_any(plus_action_cards) else 0, "+Action Cards in Supply?", [0, 1]) # +2 Action or more cards only. Chaining cards (+1 Action) don't count.
+add_feature(lambda game, bought: 1 if game.supply_contains_any(plus_buy_cards) else 0, "+Buy Cards in Supply?", [0, 1])
+add_feature(lambda game, bought: 1 if game.supply_contains_any(drawing_cards) else 0, "Drawing Cards in Supply?", [0, 1]) # +2 Cards or more only. 
+add_feature(lambda game, bought: 1 if game.supply_contains_any(cursing_cards) else 0, "Cursing Cards in Supply?", [0, 1])
+add_feature(lambda game, bought: 1 if game.supply_contains_any(trashing_cards) else 0, "Trashing Cards in Supply?", [0, 1])
+add_feature(lambda game, bought: 1 if game.supply_contains_any(attack_cards) else 0, "Attack Cards in Supply?", [0, 1])
+add_feature(lambda game, bought: 1 if game.supply_contains_any(potion_cards) else 0, "Potion Cards in Supply?", [0, 1])
 
 # Move context features
 # This is normalized by looking at the max in the 8 gb dataset. 61 was the max, so this should be good.
-add_feature(lambda game: (game.turn_number - 1.0) / 50.0, "Turn Number")
-add_feature(lambda game: bin_money_feature(game.money), "Money")
-add_feature(lambda game: bin_buys_feature(game.buys), "Buys")
-add_feature(lambda game: bin_actions_feature(game.actions), "Actions")
+add_feature(lambda game, bought: (game.turn_number - 1.0) / 50.0, "Turn Number")
+add_feature(lambda game, bought: bin_money_feature(game.money), "Money")
+add_feature(lambda game, bought: bin_buys_feature(game.buys), "Buys")
+add_feature(lambda game, bought: bin_actions_feature(game.actions), "Actions")
 
 # Game state features
-add_feature(lambda game: game.get_num_empty_piles() / 3.0, "Empty Piles")
+add_feature(lambda game, bought: game.get_num_empty_piles() / 3.0, "Empty Piles")
 # Add features for how many of each victory card have been bought so far (in games where they aren't in the supply, they are now set to 0 to indicate that none have been bought)
 for card in sorted(victory_cards):
     # Again, this needs to be in a separate function to make the card get stored in the closure
-    add_card_bought_feature(card)
-add_card_bought_feature('Curse')
+    add_card_acquired_feature(card)
+add_card_acquired_feature('Curse')
 
 # Player deck stats
 # Using game.get_player(game.possessor) gets the stats for the controlling player - either the possessor, or the regular player (as it will be None if there isn't a possessor, in which case the regular player will be retrieved.)
 # This will need to be normalized by the runner
 # Again, these are normalized by looking at the max of the large dataset
-add_feature(lambda game: game.get_player(game.possessor).get_deck_size() / 100.0, "Player Deck Size")
-add_feature(lambda game: game.get_player(game.possessor).get_action_card_count() / 40.0, "Player Deck Action Cards")
-add_feature(lambda game: game.get_player(game.possessor).get_victory_card_count() / 20.0, "Player Deck Victory Cards")
-add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_count() / 60.0, "Player Deck Treasure Cards")
-add_feature(lambda game: game.get_player(game.possessor).get_action_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Action Card Ratio")
-add_feature(lambda game: game.get_player(game.possessor).get_victory_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Victory Card Ratio")
-add_feature(lambda game: game.get_player(game.possessor).get_treasure_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Treasure Card Ratio")
+add_feature(lambda game, bought: game.get_player(game.possessor).get_deck_size() / 100.0, "Player Deck Size")
+add_feature(lambda game, bought: game.get_player(game.possessor).get_action_card_count() / 40.0, "Player Deck Action Cards")
+add_feature(lambda game, bought: game.get_player(game.possessor).get_victory_card_count() / 20.0, "Player Deck Victory Cards")
+add_feature(lambda game, bought: game.get_player(game.possessor).get_treasure_card_count() / 60.0, "Player Deck Treasure Cards")
+add_feature(lambda game, bought: game.get_player(game.possessor).get_action_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Action Card Ratio")
+add_feature(lambda game, bought: game.get_player(game.possessor).get_victory_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Victory Card Ratio")
+add_feature(lambda game, bought: game.get_player(game.possessor).get_treasure_card_count() / (game.get_player(game.possessor).get_deck_size() if game.get_player(game.possessor).get_deck_size() != 0 else 1), "Player Deck Treasure Card Ratio")
 # How many of each card are in my deck?
 for card in sorted(cards):
-    add_my_card_feature(card)
+    #add_my_card_feature(card)
+    pass
+# How many of the card that was bought are already in my deck?
+add_feature(lambda game, bought: game.get_player(game.possessor).get_card_count(bought) / game.card_initial_supply(bought) if bought != "None" else 0, "Already In Player Deck")
     
 # Output features
-add_feature(lambda game: game.get_player(game.possessor).get_final_score(), "Player Final Score")
-add_feature(lambda game: game.get_average_final_score(), "Average Final Score")
+add_feature(lambda game, bought: game.get_player(game.possessor).get_final_score(), "Player Final Score")
+add_feature(lambda game, bought: game.get_average_final_score(), "Average Final Score")
 
 # Timestamp features
-add_feature(lambda game: int(game.game_id, 16), "Game Id")
-add_feature(lambda game: game.year, "Game Year")
-add_feature(lambda game: game.month, "Game Month")
-add_feature(lambda game: game.day, "Game Day")
-add_feature(lambda game: game.hour, "Game Hour")
-add_feature(lambda game: game.minute, "Game Minute")
-add_feature(lambda game: game.second, "Game Second")
+add_feature(lambda game, bought: int(game.game_id, 16), "Game Id")
+add_feature(lambda game, bought: game.year, "Game Year")
+add_feature(lambda game, bought: game.month, "Game Month")
+add_feature(lambda game, bought: game.day, "Game Day")
+add_feature(lambda game, bought: game.hour, "Game Hour")
+add_feature(lambda game, bought: game.minute, "Game Minute")
+add_feature(lambda game, bought: game.second, "Game Second")
 
     
     
@@ -284,7 +287,7 @@ class FeatureExtractor:
         
     def write_instance(self, game, card):
         # Extract the information from the current game state and log it
-        instance = [feature.extract(game) for feature in self.features]
+        instance = [feature.extract(game, card) for feature in self.features]
         instance.append(clean(card))
         instance.append(game.calc_output_weight(game.possessor)) # Using game.possessor will use either the possessing player, or the current player if there isn't a possessor.
         #instance.append(game.get_player(game.possessor).get_final_score())

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Data.SQLite;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -15,33 +16,40 @@ namespace DominionML_SQL
             // Parse command line arguments
             List<string> argList = args.ToList<string>();
             string file = args.Contains("-f") ? args[argList.IndexOf("-f") + 1] : "test.db3";
-            bool rerandomize = args.Contains("-r") || args.Contains("-t") || args.Contains("-v");
-            rerandomize = false;
             double trainingPercent = args.Contains("-t") ? double.Parse(args[argList.IndexOf("-t") + 1]) : 0.7;
+            uint? maxTrainings = args.Contains("-mt") ? (uint?)uint.Parse(args[argList.IndexOf("-mt") + 1]) : null;
             double validationPercent = args.Contains("-v") ? double.Parse(args[argList.IndexOf("-v") + 1]) : 0.3;
-            bool recalculateOutputMinMax = args.Contains("-o");
-            bool recalculateInputMinMax = args.Contains("-i");
+            uint? maxValidations = args.Contains("-mv") ? (uint?)uint.Parse(args[argList.IndexOf("-mv") + 1]) : null;
+            bool recalculateOutputMinMax = args.Contains("-o");;
             bool boost = !args.Contains("-nb");
+            string limitCard = args.Contains("-c") ? args[argList.IndexOf("-c") + 1] : null;
+            uint epochWindow = args.Contains("-e") ? uint.Parse(args[argList.IndexOf("-e") + 1]) : 20;
 
             Console.WriteLine("Parameters: <> means argument, = means default value");
             Console.WriteLine(" -f <file=test.db3>    Use database file");
-            Console.WriteLine(" -r                    Rerandomize (reset the randomizer and use fields)");
-            Console.WriteLine(" -t <train %=0.7>      Approximate percentage of data to use for training\n" +
-                              "                       (implies -r - not anymore. Game second is now used)");
+            Console.WriteLine(" -c <card>             Train only on a single card rather than all\n" +
+                              "                       (spaces should be replaced with underscores,\n" +
+                              "                       apostrophes should be left out.)\n" +
+                              "                       (if 'Random', then a random card is picked)");
+            Console.WriteLine(" -t <train %=0.7>      Approximate percentage of data to use for training");
+            Console.WriteLine(" -mt <instances=all>   Max number of instances to train per epoch\n" +
+                              "                       (default is however many are in the training set)");
             Console.WriteLine(" -v <validate %=0.3>   Approximate percentage of training data to use for\n" +
-                              "                       validation (implies -r - not anymore. Second used now)");
+                              "                       validation");
+            Console.WriteLine(" -mv <instances=all>   Max number of instances to validate per epoch\n" +
+                              "                       (default is however many are in the training set)");
+            Console.WriteLine(" -e <window=20>        Number of previous epochs to consider in the\n" +
+                              "                       stopping window");
             Console.WriteLine(" -o                    Recalculate the normalization min/max of the output\n" +
                               "                       (otherwise, the precomputed values are used)");
-            Console.WriteLine(" -i                    Recalculate the normalization min/max for each input\n" +
-                              "                       feature (otherwise, precomputed values are used)");
             Console.WriteLine(" -nb                   Disable boosting of rare features");
+
+            Stopwatch watch = Stopwatch.StartNew();
 
             // Get the global properties from the database before starting all the subtasks.
             // Each subtask will initiate its own memory database.
             IList<string> columns;
             IList<string> features;
-            IDictionary<string, double> featureNormalizationMins = null;
-            IDictionary<string, double> featureNormalizationMaxs = null;
             IList<string> cards;
             double average = 0.0;
             double stddev = 0.0;
@@ -53,33 +61,6 @@ namespace DominionML_SQL
 
                 // Get the list of features from the table column names
                 columns = conn.GetTableColumns("instances");
-
-                // Hack in the ALTER TABLE to add the randomizer and use columns (used to divide into validation sets and such)
-                /*
-                if (!columns.Contains("randomizer"))
-                {
-                    Console.WriteLine("Adding randomizer column");
-                    string sql = @"ALTER TABLE `instances` ADD COLUMN `randomizer` INT;";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        command.ExecuteNonQuery();
-                    }
-                    rerandomize = true;
-                    columns.Add("randomizer");
-                }
-
-                if (!columns.Contains("use"))
-                {
-                    Console.WriteLine("Adding use column");
-                    string sql = @"ALTER TABLE `instances` ADD COLUMN `use` TEXT;";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        command.ExecuteNonQuery();
-                    }
-                    rerandomize = true;
-                    columns.Add("use");
-                }
-                //*/
 
                 // Normalization data
                 if (recalculateOutputMinMax)
@@ -109,197 +90,40 @@ namespace DominionML_SQL
                 Console.WriteLine("Min:     {0}", min);
                 Console.WriteLine("Max:     {0}", max);
 
-                // Old code for extracting averages and standard deviations and such...
-                //double min = 0.0;
-                //double max = 1.0;
-                /*
-                {
-                    //string sql = "SELECT MAX(`card_output_weight`) FROM `instances`;";
-                    string sql = "SELECT MAX(`player_final_score`) FROM `instances`;";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        max = Convert.ToDouble(command.ExecuteScalar());
-                    }
-                    //sql = "SELECT MIN(`card_output_weight`) FROM `instances`;";
-                    sql = "SELECT MIN(`player_final_score`) FROM `instances`;";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        min = Convert.ToDouble(command.ExecuteScalar());
-                    }
-                }
-                //*/
-
-                /*
-                {
-                    string sql = "SELECT AVG(`card_output_weight`) FROM `instances`;";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        average = Convert.ToDouble(command.ExecuteScalar());
-                    }
-                    sql = "SELECT AVG((`instances`.`card_output_weight` - `sub`.`a`)*(`instances`.`card_output_weight` - `sub`.`a`)) AS `var` FROM `instances`, (SELECT AVG(`card_output_weight`) AS `a` FROM `instances`) AS `sub`;";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        stddev = Math.Sqrt(Convert.ToDouble(command.ExecuteScalar()));
-                    }
-                }
-                //*/
-
-                /*
-                if (rerandomize)
-                {
-                    Console.WriteLine("Rerandomizing training, validation, and testing sets (this will take a while)");
-                    string sql;
-                    using (SQLiteTransaction transaction = conn.BeginTransaction())
-                    {
-                        sql = "PRAGMA journal_mode = OFF;";
-                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                        {
-                            command.ExecuteNonQuery();
-                        }
-                        Console.Write(" .");
-                        // Reset the randomizer column (used to divide training, validation, and test sets)
-                        sql = "UPDATE `instances` SET `randomizer` = ABS(RANDOM() % 100);";
-                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                        {
-                            command.ExecuteNonQuery();
-                        }
-                        Console.Write(".");
-                        sql = "DROP INDEX IF EXISTS `use_index`;";
-                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                        {
-                            command.ExecuteNonQuery();
-                        }
-                        Console.Write(".");
-                        // [ training | test ]
-                        // [ [ validation | training ] | test ]
-                        sql = "UPDATE `instances` SET `use` = (CASE WHEN `randomizer` < @validationCutoff THEN 'validation' WHEN `randomizer` < @trainingCutoff THEN 'training' ELSE 'testing' END);";
-                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                        {
-                            command.Parameters.AddWithValue("@trainingCutoff", Math.Round(trainingPercent * 100));
-                            command.Parameters.AddWithValue("@validationCutoff", Math.Round(trainingPercent * validationPercent * 100));
-                            command.ExecuteNonQuery();
-                        }
-                        Console.Write(".");
-                        sql = "CREATE INDEX IF NOT EXISTS `use_index` ON `instances` (`use`);";
-                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                        {
-                            command.ExecuteNonQuery();
-                        }
-                        Console.Write(".");
-                        sql = "PRAGMA journal_mode = ON;";
-                        using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                        {
-                            command.ExecuteNonQuery();
-                        }
-                        transaction.Commit();
-                    }
-                    Console.Write(".");
-                    sql = "VACUUM;";
-                    using (SQLiteCommand command = new SQLiteCommand(sql, conn))
-                    {
-                        command.ExecuteNonQuery();
-                    }
-                    Console.WriteLine("done");
-                }
-                //*/
-
                 features = columns.Where(IsFeatureColumn).ToList();
 
-                /*
-                // These are actually now being normalized/binned by the extractor.
-                // Calculate the normalization min/max for each column
-                featureNormalizationMins = new Dictionary<string, double>();
-                featureNormalizationMaxs = new Dictionary<string, double>();
-                string[] normalized = { "turn_number", "money", "buys", "actions", "player_deck_size", "player_deck_action_cards", "player_deck_victory_cards", "player_deck_treasure_cards" };
-                if (recalculateInputMinMax)
+                // Get the list of cards that should be trained
+                cards = GetCards(conn);
+                if (!string.IsNullOrWhiteSpace(limitCard))
                 {
-                    string minSql = @"SELECT MIN({0}) FROM `instances`;";
-                    string maxSql = @"SELECT MAX({0}) FROM `instances`;";
-                    using (SQLiteCommand minCommand = new SQLiteCommand(minSql, conn))
-                    using (SQLiteCommand maxCommand = new SQLiteCommand(maxSql, conn))
+                    if (limitCard.Equals("Random", StringComparison.OrdinalIgnoreCase))
                     {
-                        foreach (string feature in features)
-                        {
-                            double tmpMin = 0.0;
-                            double tmpMax = 1.0;
-                            if (normalized.Contains(feature))
-                            {
-                                minCommand.CommandText = string.Format(minSql, feature);
-                                maxCommand.CommandText = string.Format(maxSql, feature);
-                                tmpMin = Convert.ToDouble(minCommand.ExecuteScalar());
-                                tmpMax = Convert.ToDouble(maxCommand.ExecuteScalar());
-                            }
-                            featureNormalizationMins.Add(feature, tmpMin);
-                            featureNormalizationMaxs.Add(feature, tmpMax);
-                            Console.WriteLine("Feature Min:\t{0}\t{1}", tmpMin, feature);
-                            Console.WriteLine("Feature Max:\t{0}\t{1}", tmpMax, feature);
-                        }
+                        Random rand = new Random();
+                        cards = cards.OrderBy(card => rand.Next()).Take(1).ToList();
+                    }
+                    else
+                    {
+                        cards = cards.Where(card => card.Equals(limitCard, StringComparison.OrdinalIgnoreCase)).ToList();
                     }
                 }
                 else
                 {
-                    // Use the cached normalization min/max
-                    foreach (string feature in features)
+                    // Sort the cards so that the basic cards (which have more instances) are run first.
+                    // This prevents them from lingering on after everything else has finished.
+                    cards = cards.OrderBy(card =>
                     {
-                        double tmpMin = 0.0;
-                        double tmpMax = 1.0;
-                        /*
-                        if (normalized.Contains(feature))
+                        if (card == "Estate" || card == "Duchy" || card == "Province" || card == "Colony" ||
+                            card == "Copper" || card == "Silver" || card == "Gold" || card == "Platinum" ||
+                            card == "None")
                         {
-                            if (feature == "turn_number")
-                            {
-                                tmpMin = 1.0;
-                                tmpMax = 61.0;
-                            }
-                            else if (feature == "money")
-                            {
-                                tmpMin = 0.0;
-                                tmpMax = 20.0; // Max was really 113...
-                            }
-                            else if (feature == "buys")
-                            {
-                                tmpMin = 1.0;
-                                tmpMax = 5.0; // Max was really 45...
-                            }
-                            else if (feature == "actions")
-                            {
-                                tmpMin = 1.0;
-                                tmpMax = 20.0; // Max was really 66...
-                            }
-                            else if (feature == "player_deck_size")
-                            {
-                                tmpMin = 0.0;
-                                tmpMax = 100.0; // Max was really 133...
-                            }
-                            else if (feature == "player_deck_action_cards")
-                            {
-                                tmpMin = 0.0;
-                                tmpMax = 40.0; // Max was really 55...
-                            }
-                            else if (feature == "player_deck_victory_cards")
-                            {
-                                tmpMin = 0.0;
-                                tmpMax = 20.0; // Max was really 32...
-                            }
-                            else if (feature == "player_deck_treasure_cards")
-                            {
-                                tmpMin = 0.0;
-                                tmpMax = 60.0; // Max was really 86...
-                            }
+                            return "0" + card;
                         }
-                        //* /
-                        featureNormalizationMins.Add(feature, tmpMin);
-                        featureNormalizationMaxs.Add(feature, tmpMax);
-                    }
+                        else
+                        {
+                            return "1" + card;
+                        }
+                    }).ToList();
                 }
-                //*/
-
-                // Get the list of cards that should be trained
-                cards = GetCards(conn);
-                Random rand = new Random();
-                //cards = cards.OrderBy(card => rand.Next()).Take(1).ToList(); // Limit it to a single card for testing
-                //cards.Clear();
-                //cards.Add("None");
             }
 
             // Create each of the tasks
@@ -307,7 +131,7 @@ namespace DominionML_SQL
             Task<TaskResult>[] tasks = new Task<TaskResult>[cards.Count];
             for (int i = 0; i < cards.Count; i++)
             {
-                learnerTasks[i] = new DominionLearnerTask(cards[i], features, file, trainingPercent, validationPercent, min, max, boost, featureNormalizationMins, featureNormalizationMaxs);
+                learnerTasks[i] = new DominionLearnerTask(cards[i], features, file, trainingPercent, validationPercent, min, max, boost, maxTrainings, maxValidations, epochWindow);
                 tasks[i] = new Task<TaskResult>(learnerTasks[i].RunTask);
             }
 
@@ -335,12 +159,35 @@ namespace DominionML_SQL
             Task.WaitAll(tasks);
 
             Console.WriteLine("All Tasks Complete!");
-            TaskResult finalResult;
+            watch.Stop();
+
+            TaskResult finalResult = new TaskResult();
             foreach (Task<TaskResult> task in tasks)
             {
                 finalResult.Add(task.Result);
             }
+            double avgEpochs = (double)finalResult.Epochs / tasks.Length;
+            double avgInstancesTrained = (double)finalResult.TotalInstancesTrained / tasks.Length;
+            finalResult.TrainingMSE = finalResult.TrainingSSE / finalResult.TrainingInstances;
+            finalResult.ValidationMSE = finalResult.ValidationSSE / finalResult.ValidationInstances;
+            finalResult.TestingMSE = finalResult.TestingSSE / finalResult.TestingInstances;
+
+            Console.WriteLine("All Training Complete! (Took {0} hours, {1} minutes, {2} seconds)", Math.Floor(watch.Elapsed.TotalHours), watch.Elapsed.Minutes, watch.Elapsed.Seconds);
+            Console.WriteLine(" Trained a total of {0} instances over {1} epochs", finalResult.TotalInstancesTrained, finalResult.Epochs);
+            Console.WriteLine(" Trained a average of {0} instances over {1} epochs", Math.Round(avgInstancesTrained), Math.Round(avgEpochs, 2));
+            Console.WriteLine(" Total SSE (training set):   {0:.000} ({1:.000})", Math.Round(finalResult.TrainingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TrainingSSE), min, max), 3));
+            Console.WriteLine(" Total SSE (validation set): {0:.000} ({1:.000})", Math.Round(finalResult.ValidationSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.ValidationSSE), min, max), 3));
+            Console.WriteLine(" Total SSE (testing set):    {0:.000} ({1:.000})", Math.Round(finalResult.TestingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TestingSSE), min, max), 3));
+            Console.WriteLine(" Total MSE (training set):   {0:.000} ({1:.000})", Math.Round(finalResult.TrainingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TrainingMSE), min, max), 3));
+            Console.WriteLine(" Total MSE (validation set): {0:.000} ({1:.000})", Math.Round(finalResult.ValidationMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.ValidationMSE), min, max), 3));
+            Console.WriteLine(" Total MSE (testing set):    {0:.000} ({1:.000})", Math.Round(finalResult.TestingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TestingMSE), min, max), 3));
         }
+
+        public static double UnNormalize(double value, double min, double max)
+        {
+            return (value * (max - min)) + min;
+        }
+
 
         // These are the hard coded, known non-feature column names.
         // If other features should be excluded, they can be added to this list.
@@ -369,18 +216,26 @@ namespace DominionML_SQL
 
     public struct TaskResult
     {
+        public uint TotalInstances { get; set; }
+
         public double TrainingSSE { get; set; }
         public double TrainingMSE { get; set; }
-        public double TrainingInstances { get; set; }
+        public uint TrainingInstances { get; set; }
+        
         public double ValidationSSE { get; set; }
         public double ValidationMSE { get; set; }
-        public double ValidationInstances { get; set; }
+        public uint ValidationInstances { get; set; }
+        
         public double TestingSSE { get; set; }
         public double TestingMSE { get; set; }
-        public double TestingInstances { get; set; }
+        public uint TestingInstances { get; set; }
+
+        public uint Epochs { get; set; }
+        public uint TotalInstancesTrained { get; set; }
 
         public void Add(TaskResult other)
         {
+            TotalInstances += other.TotalInstances;
             TrainingSSE += other.TrainingSSE;
             TrainingMSE += other.TrainingMSE;
             TrainingInstances += other.TrainingInstances;
@@ -390,6 +245,8 @@ namespace DominionML_SQL
             TestingSSE += other.TestingSSE;
             TestingMSE += other.TestingMSE;
             TestingInstances += other.TestingInstances;
+            Epochs += other.Epochs;
+            TotalInstancesTrained += other.TotalInstancesTrained;
         }
     }
 
