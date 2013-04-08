@@ -1,8 +1,11 @@
+import math
 
 # This set stores all cards available in a game of dominion as strings
 # The strings should be exact matches of the isotropic names
 # But, it looks like some mechanism will need to be put in place to unpluralize names
 cards = set()
+# This maps the case insensitive, spacing and puctuation removed, card to the proper casing
+clean_cards = {}
 # This maps the card plurals to the singular
 plural_cards = {}
 pluralizer = {}
@@ -25,10 +28,19 @@ potion_cards = set()
 victory_point_symbol = unichr(9660) # u"\u25BC"
 potion_cost_symbol = unichr(9673) # u"\u25C9"
 
-
 # This does not check plural cards - the card must be sanitized if its plural
 def is_card(card):
     return card in cards
+
+def clean_card(card):
+    if card in cards:
+        return card
+    else:
+        card = card.replace(' ', '').replace('-', '').replace("'", '').replace('_', '').lower()
+        if card in clean_cards:
+            return clean_cards[card]
+        else:
+            return None
     
 def assert_card(card):
     assert is_card(card), "invalid card: {0}".format(card)
@@ -133,6 +145,7 @@ class DominionPlayer:
         self.victory_card_count = 0
         self.treasure_card_count = 0
         self.deck_size = 0
+        self.current_score = 0
         
     def set_final_score(self, score):
         self.final_score = score
@@ -170,6 +183,9 @@ class DominionPlayer:
     def get_deck_size(self):
         return self.deck_size
         
+    def get_current_score(self):
+        return self.current_score
+        
     def update_properties(self):
         self.action_card_count = 0.0
         self.victory_card_count = 0.0
@@ -177,7 +193,7 @@ class DominionPlayer:
         self.deck_size = 0.0
         self.deck_backup.clear()
         for card in self.deck.keys():
-            if self.deck[card] != 0:
+            if self.deck[card] > 0:
                 self.deck_backup[card] = self.deck[card]
             cards = self.deck[card]
             if is_action(card):
@@ -187,6 +203,48 @@ class DominionPlayer:
             if is_treasure(card):
                 self.treasure_card_count += cards
             self.deck_size += cards
+        # Get the number of points in the deck
+        self.current_score = self.vp
+        for victory_card in victory_cards:
+            if victory_card in self.deck_backup:
+                self.current_score += self.deck[victory_card] * self.get_card_points(victory_card)
+                
+    # Assumes the current action, treasure, victory, etc. card counts cached are correct
+    # Uses the deck backup to count specific cards.
+    def get_card_points(self, card):
+        if card == 'Estate':
+            return 1
+        elif card == 'Duchy':
+            return 3
+        elif card == 'Province':
+            return 6
+        elif card == 'Colony':
+            return 10
+        elif card == 'Gardens':
+            return math.floor(self.deck_size / 10.0)
+        elif card == 'Great Hall':
+            return 1
+        elif card == 'Duke':
+            if 'Duchy' in self.deck_backup:
+                return self.deck_backup['Duchy']
+            else:
+                return 0
+        elif card == 'Harem':
+            return 2
+        elif card == 'Nobles':
+            return 2
+        elif card == 'Island':
+            return 2
+        elif card == 'Vineyard':
+            return math.floor(self.action_card_count / 3.0)
+        elif card == 'Fairgrounds':
+            return math.floor(len(self.deck_backup.keys()) / 5.0)
+        elif card == 'Silk Road':
+            return math.floor(self.victory_card_count / 4.0)
+        elif card == 'Farmland':
+            return 2
+        else:
+            return 0
         
     def get_card_count(self, card):
         if card in self.deck_backup:
@@ -627,6 +685,9 @@ class DominionGame:
         
     def get_cards_bought(self):
         return self.cards_bought
+        
+    def get_cards_in_supply(self):
+        return self.supply.keys()
             
     def is_card_in_supply(self, card):
         return card in self.supply.keys()
@@ -780,6 +841,7 @@ class DominionGame:
             
 def add_card(card, plural = None, actions=False, buys=False, draws=False, curse=False, trash=False, attack=False, supply=True, potion=False):
     cards.add(card)
+    clean_cards[card.replace(' ', '').replace('-', '').replace("'", '').replace('_', '').lower()] = card
     if plural is None:
         # By default, the plural of a card is just an 's' added to the end
         plural = card + 's'

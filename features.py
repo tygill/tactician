@@ -129,6 +129,8 @@ for card in sorted(cards):
 add_feature(lambda game, bought: game.get_player(game.possessor).get_card_count(bought) / game.card_initial_supply(bought) if bought != "None" else 0, "Already In Player Deck")
     
 # Output features
+add_feature(lambda game, bought: game.get_player(game.possessor).get_current_score(), "Player Current Score")
+add_feature(lambda game, bought: game.get_player(game.possessor).get_final_score() - game.get_player(game.possessor).get_current_score(), "Player Score Increase")
 add_feature(lambda game, bought: game.get_player(game.possessor).get_final_score(), "Player Final Score")
 add_feature(lambda game, bought: game.get_average_final_score(), "Average Final Score")
 
@@ -220,7 +222,7 @@ class FeatureExtractor:
                 use TEXT DEFAULT NULL,
                 randomizer INT
             );
-        """.format(''.join(self.get_sql_create_columns())) # '\n                '
+        """.format('\n                '.join(self.get_sql_create_columns())) # '\n                '
         #player_final_score REAL,
         #average_final_score REAL,
         

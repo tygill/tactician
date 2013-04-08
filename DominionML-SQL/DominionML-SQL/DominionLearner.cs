@@ -12,6 +12,8 @@ namespace DominionML_SQL
         {
             return new BackpropagationLearner(card, features, boosts);
         }
+
+        public static string Folder { get { return BackpropagationLearner.LogFolder; } }
     }
 
     public abstract class DominionLearner : IDisposable

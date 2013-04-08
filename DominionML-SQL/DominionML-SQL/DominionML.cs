@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.SQLite;
 using System.Diagnostics;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -16,13 +17,14 @@ namespace DominionML_SQL
             // Parse command line arguments
             List<string> argList = args.ToList<string>();
             string file = args.Contains("-f") ? args[argList.IndexOf("-f") + 1] : "test.db3";
-            double trainingPercent = args.Contains("-t") ? double.Parse(args[argList.IndexOf("-t") + 1]) : 0.7;
+            double trainingPercent = args.Contains("-t") ? double.Parse(args[argList.IndexOf("-t") + 1]) : 0.8;
             uint? maxTrainings = args.Contains("-mt") ? (uint?)uint.Parse(args[argList.IndexOf("-mt") + 1]) : null;
-            double validationPercent = args.Contains("-v") ? double.Parse(args[argList.IndexOf("-v") + 1]) : 0.3;
+            double validationPercent = args.Contains("-v") ? double.Parse(args[argList.IndexOf("-v") + 1]) : 0.2;
             uint? maxValidations = args.Contains("-mv") ? (uint?)uint.Parse(args[argList.IndexOf("-mv") + 1]) : null;
-            bool recalculateOutputMinMax = args.Contains("-o");;
+            bool recalculateOutputMinMax = args.Contains("-no");;
             bool boost = !args.Contains("-nb");
             string limitCard = args.Contains("-c") ? args[argList.IndexOf("-c") + 1] : null;
+            string outputFeature = args.Contains("-o") ? args[argList.IndexOf("-o") + 1] : "player_final_score";
             uint epochWindow = args.Contains("-e") ? uint.Parse(args[argList.IndexOf("-e") + 1]) : 20;
 
             Console.WriteLine("Parameters: <> means argument, = means default value");
@@ -31,16 +33,18 @@ namespace DominionML_SQL
                               "                       (spaces should be replaced with underscores,\n" +
                               "                       apostrophes should be left out.)\n" +
                               "                       (if 'Random', then a random card is picked)");
-            Console.WriteLine(" -t <train %=0.7>      Approximate percentage of data to use for training");
+            Console.WriteLine(" -o <feature>          Use the given output feature\n" +
+                              "                       (default is player_final_score)");
+            Console.WriteLine(" -t <train %=0.8>      Approximate percentage of data to use for training");
             Console.WriteLine(" -mt <instances=all>   Max number of instances to train per epoch\n" +
                               "                       (default is however many are in the training set)");
-            Console.WriteLine(" -v <validate %=0.3>   Approximate percentage of training data to use for\n" +
+            Console.WriteLine(" -v <validate %=0.2>   Approximate percentage of training data to use for\n" +
                               "                       validation");
             Console.WriteLine(" -mv <instances=all>   Max number of instances to validate per epoch\n" +
                               "                       (default is however many are in the training set)");
             Console.WriteLine(" -e <window=20>        Number of previous epochs to consider in the\n" +
                               "                       stopping window");
-            Console.WriteLine(" -o                    Recalculate the normalization min/max of the output\n" +
+            Console.WriteLine(" -no                   Recalculate the normalization min/max of the output\n" +
                               "                       (otherwise, the precomputed values are used)");
             Console.WriteLine(" -nb                   Disable boosting of rare features");
 
@@ -114,7 +118,7 @@ namespace DominionML_SQL
                     {
                         if (card == "Estate" || card == "Duchy" || card == "Province" || card == "Colony" ||
                             card == "Copper" || card == "Silver" || card == "Gold" || card == "Platinum" ||
-                            card == "None")
+                            card == "Potion" || card == "None")
                         {
                             return "0" + card;
                         }
@@ -131,7 +135,7 @@ namespace DominionML_SQL
             Task<TaskResult>[] tasks = new Task<TaskResult>[cards.Count];
             for (int i = 0; i < cards.Count; i++)
             {
-                learnerTasks[i] = new DominionLearnerTask(cards[i], features, file, trainingPercent, validationPercent, min, max, boost, maxTrainings, maxValidations, epochWindow);
+                learnerTasks[i] = new DominionLearnerTask(cards[i], features, outputFeature, file, trainingPercent, validationPercent, min, max, boost, maxTrainings, maxValidations, epochWindow);
                 tasks[i] = new Task<TaskResult>(learnerTasks[i].RunTask);
             }
 
@@ -172,15 +176,28 @@ namespace DominionML_SQL
             finalResult.ValidationMSE = finalResult.ValidationSSE / finalResult.ValidationInstances;
             finalResult.TestingMSE = finalResult.TestingSSE / finalResult.TestingInstances;
 
-            Console.WriteLine("All Training Complete! (Took {0} hours, {1} minutes, {2} seconds)", Math.Floor(watch.Elapsed.TotalHours), watch.Elapsed.Minutes, watch.Elapsed.Seconds);
+            using (StreamWriter log = new StreamWriter(String.Format("{0}\\Final.txt", LearnerFactory.Folder), false))
+            {
+                log.WriteLine("All Training Complete! (Took {0} hours, {1} minutes, {2} seconds and trained {3} cards)", Math.Floor(watch.Elapsed.TotalHours), watch.Elapsed.Minutes, watch.Elapsed.Seconds, cards.Count);
+                log.WriteLine(" Trained a total of {0} instances over {1} epochs", finalResult.TotalInstancesTrained, finalResult.Epochs);
+                log.WriteLine(" Trained an average of {0} instances over {1} epochs", Math.Round(avgInstancesTrained), Math.Round(avgEpochs, 2));
+                log.WriteLine(" Total SSE (training sets):   {0:.000} ({1:.000})", Math.Round(finalResult.TrainingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TrainingSSE), min, max), 3));
+                log.WriteLine(" Total SSE (validation sets): {0:.000} ({1:.000})", Math.Round(finalResult.ValidationSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.ValidationSSE), min, max), 3));
+                log.WriteLine(" Total SSE (testing sets):    {0:.000} ({1:.000})", Math.Round(finalResult.TestingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TestingSSE), min, max), 3));
+                log.WriteLine(" Total MSE (training sets):   {0:.000} ({1:.000})", Math.Round(finalResult.TrainingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TrainingMSE), min, max), 3));
+                log.WriteLine(" Total MSE (validation sets): {0:.000} ({1:.000})", Math.Round(finalResult.ValidationMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.ValidationMSE), min, max), 3));
+                log.WriteLine(" Total MSE (testing sets):    {0:.000} ({1:.000})", Math.Round(finalResult.TestingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TestingMSE), min, max), 3));
+            }
+
+            Console.WriteLine("All Training Complete! (Took {0} hours, {1} minutes, {2} seconds and trained {3} cards)", Math.Floor(watch.Elapsed.TotalHours), watch.Elapsed.Minutes, watch.Elapsed.Seconds, cards.Count);
             Console.WriteLine(" Trained a total of {0} instances over {1} epochs", finalResult.TotalInstancesTrained, finalResult.Epochs);
-            Console.WriteLine(" Trained a average of {0} instances over {1} epochs", Math.Round(avgInstancesTrained), Math.Round(avgEpochs, 2));
-            Console.WriteLine(" Total SSE (training set):   {0:.000} ({1:.000})", Math.Round(finalResult.TrainingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TrainingSSE), min, max), 3));
-            Console.WriteLine(" Total SSE (validation set): {0:.000} ({1:.000})", Math.Round(finalResult.ValidationSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.ValidationSSE), min, max), 3));
-            Console.WriteLine(" Total SSE (testing set):    {0:.000} ({1:.000})", Math.Round(finalResult.TestingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TestingSSE), min, max), 3));
-            Console.WriteLine(" Total MSE (training set):   {0:.000} ({1:.000})", Math.Round(finalResult.TrainingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TrainingMSE), min, max), 3));
-            Console.WriteLine(" Total MSE (validation set): {0:.000} ({1:.000})", Math.Round(finalResult.ValidationMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.ValidationMSE), min, max), 3));
-            Console.WriteLine(" Total MSE (testing set):    {0:.000} ({1:.000})", Math.Round(finalResult.TestingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TestingMSE), min, max), 3));
+            Console.WriteLine(" Trained an average of {0} instances over {1} epochs", Math.Round(avgInstancesTrained), Math.Round(avgEpochs, 2));
+            Console.WriteLine(" Total SSE (training sets):   {0:.000} ({1:.000})", Math.Round(finalResult.TrainingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TrainingSSE), min, max), 3));
+            Console.WriteLine(" Total SSE (validation sets): {0:.000} ({1:.000})", Math.Round(finalResult.ValidationSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.ValidationSSE), min, max), 3));
+            Console.WriteLine(" Total SSE (testing sets):    {0:.000} ({1:.000})", Math.Round(finalResult.TestingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TestingSSE), min, max), 3));
+            Console.WriteLine(" Total MSE (training sets):   {0:.000} ({1:.000})", Math.Round(finalResult.TrainingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TrainingMSE), min, max), 3));
+            Console.WriteLine(" Total MSE (validation sets): {0:.000} ({1:.000})", Math.Round(finalResult.ValidationMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.ValidationMSE), min, max), 3));
+            Console.WriteLine(" Total MSE (testing sets):    {0:.000} ({1:.000})", Math.Round(finalResult.TestingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TestingMSE), min, max), 3));
         }
 
         public static double UnNormalize(double value, double min, double max)
@@ -191,7 +208,7 @@ namespace DominionML_SQL
 
         // These are the hard coded, known non-feature column names.
         // If other features should be excluded, they can be added to this list.
-        private static string[] nonFeatureColumns = { "id", "card_bought", "card_output_weight", "player_final_score", "average_final_score", "randomizer", "use", "game_id", "game_year", "game_month", "game_day", "game_hour", "game_minute", "game_second" };
+        private static string[] nonFeatureColumns = { "id", "card_bought", "card_output_weight", "player_current_score", "player_score_increase", "player_final_score", "average_final_score", "randomizer", "use", "game_id", "game_year", "game_month", "game_day", "game_hour", "game_minute", "game_second" };
         public static bool IsFeatureColumn(string column)
         {
             return !nonFeatureColumns.Contains(column);

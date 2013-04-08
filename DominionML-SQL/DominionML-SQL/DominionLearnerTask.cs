@@ -14,6 +14,7 @@ namespace DominionML_SQL
     {
         public string Card { get; private set; }
         public IList<string> Features { get; private set; }
+        public string OutputFeature { get; private set; }
         public double[] Boosts { get; private set; }
         public bool Boost { get; private set; }
         public double BoostValue { get; private set; }
@@ -26,9 +27,10 @@ namespace DominionML_SQL
         public double NormalizationMax { get; private set; }
         private string DatabaseFile;
 
-        public DominionLearnerTask(string card, IList<string> features, string dbFile, double trainingPercent, double validationPercent, double min, double max, bool boost, uint? maxTrainingsPerEpoch = null, uint? maxValidationsPerEpoch = null, uint epochWindow = 20)
+        public DominionLearnerTask(string card, IList<string> features, string outputFeature, string dbFile, double trainingPercent, double validationPercent, double min, double max, bool boost, uint? maxTrainingsPerEpoch = null, uint? maxValidationsPerEpoch = null, uint epochWindow = 20)
         {
             Card = card;
+            OutputFeature = outputFeature;
             TrainingPercent = trainingPercent;
             MaxTrainingsPerEpoch = maxTrainingsPerEpoch;
             ValidationPercent = validationPercent;
@@ -128,7 +130,7 @@ namespace DominionML_SQL
 
                         log.WriteLine("{0}: Copying data...", Card);
                         //sql = String.Format(@"CREATE TABLE `main`.`instances` AS SELECT `{0}`,`card_bought`, `player_final_score`, `use`, `randomizer` FROM `source_db`.`instances` WHERE `source_db`.`instances`.`card_bought` = @card_bought;", string.Join("`, `", Features));
-                        sql = String.Format(@"CREATE TABLE `main`.`instances` AS SELECT `{0}`,`card_bought`, `player_final_score`, `game_second` FROM `source_db`.`instances` WHERE `source_db`.`instances`.`card_bought` = @card_bought;", string.Join("`, `", Features));
+                        sql = String.Format(@"CREATE TABLE `main`.`instances` AS SELECT `{0}`,`card_bought`, `{1}`, `game_second` FROM `source_db`.`instances` WHERE `source_db`.`instances`.`card_bought` = @card_bought;", string.Join("`, `", Features), OutputFeature);
                         using (SQLiteCommand command = new SQLiteCommand(sql, conn))
                         {
                             command.Parameters.AddWithValue("@card_bought", Card);
@@ -188,6 +190,8 @@ namespace DominionML_SQL
                             log.WriteLine("Using boosting on rare features (boost value: {0})", BoostValue);
                         }
 
+                        log.WriteLine("Using {0} as the target/output feature", OutputFeature);
+
 
                         // Epoch status
                         uint trainingsPerEpoch = MaxTrainingsPerEpoch.HasValue ? MaxTrainingsPerEpoch.Value : result.TrainingInstances; // Math.Min(trainingInstances, 500);
@@ -209,7 +213,7 @@ namespace DominionML_SQL
                         bool done = false;
                         bool averagePassed = false;
                         double previousMSE = double.MaxValue;
-                        sql = string.Format(@"SELECT `{0}`, `player_final_score` FROM `instances` WHERE {{0}} ORDER BY RANDOM();", string.Join("`, `", Features));
+                        sql = string.Format(@"SELECT `{0}`, `{1}` FROM `instances` WHERE {{0}} ORDER BY RANDOM();", string.Join("`, `", Features), OutputFeature);
                         using (SQLiteCommand trainingCommand = new SQLiteCommand(string.Format(sql, "`game_second` >= @validationCutoff AND `game_second` < @trainingCutoff"), conn))
                         using (SQLiteCommand validationCommand = new SQLiteCommand(string.Format(sql, "`game_second` < @validationCutoff"), conn))
                         using (SQLiteCommand testingCommand = new SQLiteCommand(string.Format(sql, "`game_second` >= @trainingCutoff"), conn))

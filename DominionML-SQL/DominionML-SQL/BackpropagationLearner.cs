@@ -29,7 +29,9 @@ namespace DominionML_SQL
             return Backprop.Predict(features);
         }
 
-        public override string Folder { get { return "Backprop"; } }
+        public static string LogFolder { get { return "Backprop"; } }
+
+        public override string Folder { get { return LogFolder; } }
 
         public override string Serialize()
         {
