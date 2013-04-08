@@ -40,10 +40,10 @@ def add_card_feature(card):
     add_feature(lambda game, bought: 1 if game.is_card_in_supply(card) else 0, '{0} in Supply?'.format(card), [0, 1])
     
 def add_card_acquired_feature(card):
-    add_feature(lambda game, bought: game.get_card_acquired_count(card) / game.card_initial_supply(card), "{0} Acquired".format(pluralize_card(card)))
+    add_feature(lambda game, bought: game.get_card_acquired_count(card) / game.card_initial_supply(card) if game.card_initial_supply(card) != 0 else 0, "{0} Acquired".format(pluralize_card(card)))
     
 def add_my_card_feature(card):
-    add_feature(lambda game, bought: game.get_player(game.possessor).get_card_count(card) / game.card_initial_supply(card), "{0} In Player Deck".format(pluralize_card(card)))
+    add_feature(lambda game, bought: game.get_player(game.possessor).get_card_count(card) / game.card_initial_supply(card) if game.card_initial_supply(card) != 0 else 0, "{0} In Player Deck".format(pluralize_card(card)))
     
 # Binners
 # Bins money to 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12+

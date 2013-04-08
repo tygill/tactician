@@ -191,10 +191,10 @@ add_predictor_regex(r'(?:(?P<player>.*) )?(?:reduce )?costs?(?: by)?(?: (?P<cost
     lambda match, player: "Reducing costs by {0}".format(int(match.group('cost')) if match.group('actions') else 1))
 add_predictor_regex(r'(?:(?P<player>.*) )?gains? (?P<card>.*)',
     lambda game, match, player: game.gain(clean_card(match.group('card')), player),
-    lambda match, player: "{0} gaining a(n) {1}".format(player.name, clean_card(match.group('card'))))
+    lambda match, player: "{0} gaining a {1}".format(player.name, clean_card(match.group('card'))))
 add_predictor_regex(r'(?:(?P<player>.*) )?trashe?s? (?P<card>.*)',
     lambda game, match, player: game.trash(clean_card(match.group('card')), player),
-    lambda match, player: "{0} trashing a(n) {1}".format(player.name, clean_card(match.group('card'))))
+    lambda match, player: "{0} trashing a {1}".format(player.name, clean_card(match.group('card'))))
 
 
 if __name__ == '__main__':
@@ -208,7 +208,7 @@ if __name__ == '__main__':
         if not card:
             card = 'None'
         if ext == '.json':
-            print 'Loading {0} predictor'.format(card)
+            #print 'Loading {0} predictor'.format(card)
             json_file = open(os.path.join(folder, file))
             json_str = json_file.read()
             json_file.close()
@@ -231,6 +231,7 @@ if __name__ == '__main__':
             print '  Unrecognized card: {0}'.format(line)
             print "   Enter 'done' to finish"
             
+    print
     print 'Setup players'
     done = False
     players = []
@@ -246,12 +247,13 @@ if __name__ == '__main__':
             game.add_player(line)
     
     # Start the game
+    print
     print 'Starting Game!'
     game.init_game()
     
     # Bootstrap the game
     cur_player = 0
-    game.start_new_turn(players[0], 0) #increment_turn=True
+    game.start_new_turn(players[0], 1) #increment_turn=True
     
     # Game lop
     predict_regex = re.compile(r'predict(?: (?P<count>\d+))?')
@@ -260,6 +262,17 @@ if __name__ == '__main__':
         print "{0}'s turn {1}, {2} actions {3} buys ${4}".format(game.get_player(game.possessor).name, game.turn_number, game.actions, game.buys, game.money)
         line = raw_input("> ")
         
+        if line == 'quit':
+            done = True
+            continue
+        
+        print
+        
+        if line == 'next turn' or line == 'turn':
+            cur_player = (cur_player + 1) % len(players)
+            game.start_new_turn(players[cur_player], increment_turn=cur_player == 0)
+            continue
+        
         match = predict_regex.match(line)
         if match:
             count = int(match.group('count')) if match.group('count') else 5
@@ -267,15 +280,6 @@ if __name__ == '__main__':
             print ' Predictions:'
             for i in range(count):
                 print '  {0} ({1})'.format(scores[i][1], scores[i][0])
-        
-        if line == 'next turn' or line == 'turn':
-            cur_player = (cur_player + 1) % len(players)
-            game.start_new_turn(players[cur_player], increment_turn=cur_player == 0)
-            continue
-        
-        if line == 'quit':
-            done = True
-            continue
         
         for regex, matcher, msg_func in predictor_loop_regexes:
             match = regex.match(line)
@@ -289,7 +293,7 @@ if __name__ == '__main__':
                 msg = msg_func(match, player)
                 if msg:
                     print ' {0}'.format(msg)
-    
+        
     
     #print 'Predictions:'
     #scores = predictor.pick_card(game)
