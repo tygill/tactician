@@ -29,6 +29,10 @@ namespace DominionML_SQL
             bool sigmoidOutputs = args.Contains("-s");
             double min = args.Contains("-nmin") ? double.Parse(args[argList.IndexOf("-nmin") + 1]) : 0.0;
             double max = args.Contains("-nmax") ? double.Parse(args[argList.IndexOf("-nmax") + 1]) : 0.0;
+            if (args.Contains("-p"))
+            {
+                LearnerFactory.Learner = LearnerFactory.Learners.Perceptron;
+            }
 
             Console.WriteLine("Parameters: <> means argument, = means default value");
             Console.WriteLine(" -f <file=test.db3>    Use database file");
@@ -53,6 +57,7 @@ namespace DominionML_SQL
             Console.WriteLine(" -nmin <min>           Use the given output normalization min");
             Console.WriteLine(" -nmax <max>           Use the given output normalization max");
             Console.WriteLine(" -nb                   Disable boosting of rare features");
+            Console.WriteLine(" -p                    Use a perceptron rather than backprop");
 
             Stopwatch watch = Stopwatch.StartNew();
 

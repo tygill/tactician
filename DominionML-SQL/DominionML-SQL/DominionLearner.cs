@@ -8,12 +8,39 @@ namespace DominionML_SQL
 {
     public static class LearnerFactory
     {
-        public static DominionLearner CreateDominionLearner(string card, IList<string> features, double[] boosts, bool sigmoidOutputs)
-        {
-            return new BackpropagationLearner(card, features, boosts, sigmoidOutputs);
+        public enum Learners { Backprop, Perceptron }
+        public static Learners Learner { get; set; }
+
+        static LearnerFactory() {
+            Learner = Learners.Backprop;
         }
 
-        public static string Folder { get { return BackpropagationLearner.LogFolder; } }
+        public static DominionLearner CreateDominionLearner(string card, IList<string> features, double[] boosts, bool sigmoidOutputs)
+        {
+            switch (Learner)
+            {
+                default:
+                case Learners.Backprop:
+                    return new BackpropagationLearner(card, features, boosts, sigmoidOutputs);
+                case Learners.Perceptron:
+                    return new PerceptronLearner(card, features);
+            }
+        }
+
+        public static string Folder
+        {
+            get
+            {
+                switch (Learner)
+                {
+                    default:
+                    case Learners.Backprop:
+                        return BackpropagationLearner.LogFolder;
+                    case Learners.Perceptron:
+                        return PerceptronLearner.LogFolder;
+                }
+            }
+        }
     }
 
     public abstract class DominionLearner : IDisposable
