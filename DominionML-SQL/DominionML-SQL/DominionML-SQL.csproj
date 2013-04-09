@@ -57,6 +57,8 @@
     <Compile Include="DominionLearner.cs" />
     <Compile Include="DominionLearnerTask.cs" />
     <Compile Include="DominionML.cs" />
+    <Compile Include="Perceptron.cs" />
+    <Compile Include="PerceptronLearner.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
