@@ -27,6 +27,7 @@ namespace DominionML_SQL
         public double SpeedUp { get; private set; }
         public double MaxInitialWeight { get; private set; }
         public double[] Boosts { get; private set; }
+        public bool SigmoidOutputs { get; private set; }
 
 
         private List<InputNode> inputNodes;
@@ -46,10 +47,11 @@ namespace DominionML_SQL
             //Console.WriteLine("Momentum/Speed Up: {0}", SpeedUp);
         }
 
-        public void Init(IList<string> inputList, double[] boosts, int outputs = 1, HiddenLayerSize hiddenLayerSize = null, int layers = 1)
+        public void Init(IList<string> inputList, double[] boosts, int outputs = 1, HiddenLayerSize hiddenLayerSize = null, int layers = 1, bool sigmoidOutputs = false)
         {
             int inputs = inputList.Count();
             Boosts = boosts;
+            SigmoidOutputs = sigmoidOutputs;
             hiddenLayerSize = hiddenLayerSize == null ? twoNInputs : hiddenLayerSize;
             inputNodes = new List<InputNode>(inputs);
             hiddenNodes = new List<List<HiddenNode>>(layers);

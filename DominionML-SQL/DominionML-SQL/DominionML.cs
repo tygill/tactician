@@ -26,6 +26,9 @@ namespace DominionML_SQL
             string limitCard = args.Contains("-c") ? args[argList.IndexOf("-c") + 1] : null;
             string outputFeature = args.Contains("-o") ? args[argList.IndexOf("-o") + 1] : "player_final_score";
             uint epochWindow = args.Contains("-e") ? uint.Parse(args[argList.IndexOf("-e") + 1]) : 20;
+            bool sigmoidOutputs = args.Contains("-s");
+            double min = args.Contains("-nmin") ? double.Parse(args[argList.IndexOf("-nmin") + 1]) : 0.0;
+            double max = args.Contains("-nmax") ? double.Parse(args[argList.IndexOf("-nmax") + 1]) : 0.0;
 
             Console.WriteLine("Parameters: <> means argument, = means default value");
             Console.WriteLine(" -f <file=test.db3>    Use database file");
@@ -33,6 +36,7 @@ namespace DominionML_SQL
                               "                       (spaces should be replaced with underscores,\n" +
                               "                       apostrophes should be left out.)\n" +
                               "                       (if 'Random', then a random card is picked)");
+            Console.WriteLine(" -s                    Use a sigmoid output, rather than continuous\n");
             Console.WriteLine(" -o <feature>          Use the given output feature\n" +
                               "                       (default is player_final_score)");
             Console.WriteLine(" -t <train %=0.8>      Approximate percentage of data to use for training");
@@ -46,6 +50,8 @@ namespace DominionML_SQL
                               "                       stopping window");
             Console.WriteLine(" -no                   Recalculate the normalization min/max of the output\n" +
                               "                       (otherwise, the precomputed values are used)");
+            Console.WriteLine(" -nmin <min>           Use the given output normalization min");
+            Console.WriteLine(" -nmax <max>           Use the given output normalization max");
             Console.WriteLine(" -nb                   Disable boosting of rare features");
 
             Stopwatch watch = Stopwatch.StartNew();
@@ -57,8 +63,6 @@ namespace DominionML_SQL
             IList<string> cards;
             double average = 0.0;
             double stddev = 0.0;
-            double min = 0.0;
-            double max = 0.0;
             using (SQLiteConnection conn = new SQLiteConnection(string.Format("Data Source={0};Version=3;", file)))
             {
                 conn.Open();
@@ -86,8 +90,11 @@ namespace DominionML_SQL
                     average = 38.25765735;
                     stddev = 18.68538455;
                 }
-                min = average - 2 * stddev; // This should catch about 95% of all games within this normalization region, assuming this does indeed have a mostly normal distribution.
-                max = average + 2 * stddev;
+                if (min == 0.0 && max == 0.0)
+                {
+                    min = average - 2 * stddev; // This should catch about 95% of all games within this normalization region, assuming this does indeed have a mostly normal distribution.
+                    max = average + 2 * stddev;
+                }
 
                 Console.WriteLine("Average: {0}", average);
                 Console.WriteLine("Std Dev: {0}", stddev);
@@ -135,7 +142,7 @@ namespace DominionML_SQL
             Task<TaskResult>[] tasks = new Task<TaskResult>[cards.Count];
             for (int i = 0; i < cards.Count; i++)
             {
-                learnerTasks[i] = new DominionLearnerTask(cards[i], features, outputFeature, file, trainingPercent, validationPercent, min, max, boost, maxTrainings, maxValidations, epochWindow);
+                learnerTasks[i] = new DominionLearnerTask(cards[i], features, outputFeature, file, trainingPercent, validationPercent, min, max, boost, sigmoidOutputs, maxTrainings, maxValidations, epochWindow);
                 tasks[i] = new Task<TaskResult>(learnerTasks[i].RunTask);
             }
 
@@ -208,7 +215,7 @@ namespace DominionML_SQL
 
         // These are the hard coded, known non-feature column names.
         // If other features should be excluded, they can be added to this list.
-        private static string[] nonFeatureColumns = { "id", "card_bought", "card_output_weight", "player_current_score", "player_score_increase", "player_final_score", "average_final_score", "randomizer", "use", "game_id", "game_year", "game_month", "game_day", "game_hour", "game_minute", "game_second" };
+        private static string[] nonFeatureColumns = { "id", "card_bought", "card_output_weight", "player_current_score", "player_score_increase", "player_final_score", "average_final_score", "player_won", "randomizer", "use", "game_id", "game_year", "game_month", "game_day", "game_hour", "game_minute", "game_second" };
         public static bool IsFeatureColumn(string column)
         {
             return !nonFeatureColumns.Contains(column);

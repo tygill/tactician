@@ -175,13 +175,27 @@ namespace DominionML_SQL
 
         public override double FNet()
         {
-            // Take the dot product of the inputs and their weights
-            return inputIndexes.Select(pair => pair.Key.Output * weights[pair.Value]).Sum();
+            if (Network.SigmoidOutputs)
+            {
+                return base.FNet();
+            }
+            else
+            {
+                // Take the dot product of the inputs and their weights
+                return inputIndexes.Select(pair => pair.Key.Output * weights[pair.Value]).Sum();
+            }
         }
 
         public override double FNetPrime()
         {
-            return 1.0;
+            if (Network.SigmoidOutputs)
+            {
+                return base.FNetPrime();
+            }
+            else
+            {
+                return 1.0;
+            }
         }
 
         // This is overriden to disable the sigmoid conversion of net to output

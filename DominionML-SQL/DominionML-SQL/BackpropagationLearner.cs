@@ -10,13 +10,13 @@ namespace DominionML_SQL
     {
         public BackpropNetwork Backprop { get; private set; }
 
-        public BackpropagationLearner(string card, IList<string> inputs, double[] boosts, int outputs = 1, BackpropNetwork.HiddenLayerSize hiddenLayerSize = null, int layers = 1)
+        public BackpropagationLearner(string card, IList<string> inputs, double[] boosts, bool sigmoidOutputs = false, int outputs = 1, BackpropNetwork.HiddenLayerSize hiddenLayerSize = null, int layers = 1)
             : base(card)
         {
             Backprop = new BackpropNetwork();
             // Initialize the network now...
             // This may eventually be replaced with code that initializes it from a serialized file
-            Backprop.Init(inputs, boosts, outputs, hiddenLayerSize, layers);
+            Backprop.Init(inputs, boosts, outputs, hiddenLayerSize, layers, sigmoidOutputs);
         }
 
         public override void TrainInstance(double[] features, double label)

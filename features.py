@@ -133,6 +133,7 @@ add_feature(lambda game, bought: game.get_player(game.possessor).get_current_sco
 add_feature(lambda game, bought: game.get_player(game.possessor).get_final_score() - game.get_player(game.possessor).get_current_score(), "Player Score Increase")
 add_feature(lambda game, bought: game.get_player(game.possessor).get_final_score(), "Player Final Score")
 add_feature(lambda game, bought: game.get_average_final_score(), "Average Final Score")
+add_feature(lambda game, bought: 1 if game.get_player(game.possessor) is game.get_player(game.winner) else 0, "Player_Won")
 
 # Timestamp features
 add_feature(lambda game, bought: int(game.game_id, 16), "Game Id")
@@ -288,6 +289,9 @@ class FeatureExtractor:
             self.write_instance(game, 'None')
         
     def write_instance(self, game, card):
+        # Hack in some code to only log instances for winning players
+        if ignore_losers and game.get_player(game.possessor) is not game.get_player(game.winner):
+            return
         # Extract the information from the current game state and log it
         instance = [feature.extract(game, card) for feature in self.features]
         instance.append(clean(card))
@@ -402,12 +406,14 @@ if __name__ == '__main__':
     process_unhandled = '-u' in sys.argv
     process_errors = '-e' in sys.argv
     process_main = '-n' not in sys.argv
+    ignore_losers = '-w' in sys.argv
     if '-h' in sys.argv:
         print 'Command line args:'
         print ' -i: Reprocess ignored directory'
         print ' -u: Reprocess unhandled directory'
         print ' -e: Reprocess error directory'
         print ' -n: Don\'t process the main directory'
+        print ' -w: Only log instances of winners'
         #print ' -sql: Export to sqlite db (default)'
         print ' -no-sql: Don\'t export to sqlite db'
         print ' -arff: Export an arff file'

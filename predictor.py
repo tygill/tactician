@@ -259,14 +259,13 @@ if __name__ == '__main__':
     predict_regex = re.compile(r'predict(?: (?P<count>\d+))?')
     done = False
     while not done:
+        print
         print "{0}'s turn {1}, {2} actions {3} buys ${4}".format(game.get_player(game.possessor).name, game.turn_number, game.actions, game.buys, game.money)
         line = raw_input("> ")
         
         if line == 'quit':
             done = True
             continue
-        
-        print
         
         if line == 'next turn' or line == 'turn':
             cur_player = (cur_player + 1) % len(players)

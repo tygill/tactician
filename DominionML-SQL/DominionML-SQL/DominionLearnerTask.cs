@@ -18,6 +18,7 @@ namespace DominionML_SQL
         public double[] Boosts { get; private set; }
         public bool Boost { get; private set; }
         public double BoostValue { get; private set; }
+        public bool SigmoidOutputs { get; private set; }
         public double TrainingPercent { get; private set; }
         public uint? MaxTrainingsPerEpoch { get; private set; }
         public double ValidationPercent { get; private set; }
@@ -27,10 +28,11 @@ namespace DominionML_SQL
         public double NormalizationMax { get; private set; }
         private string DatabaseFile;
 
-        public DominionLearnerTask(string card, IList<string> features, string outputFeature, string dbFile, double trainingPercent, double validationPercent, double min, double max, bool boost, uint? maxTrainingsPerEpoch = null, uint? maxValidationsPerEpoch = null, uint epochWindow = 20)
+        public DominionLearnerTask(string card, IList<string> features, string outputFeature, string dbFile, double trainingPercent, double validationPercent, double min, double max, bool boost, bool sigmoidOutputs, uint? maxTrainingsPerEpoch = null, uint? maxValidationsPerEpoch = null, uint epochWindow = 20)
         {
             Card = card;
             OutputFeature = outputFeature;
+            SigmoidOutputs = sigmoidOutputs;
             TrainingPercent = trainingPercent;
             MaxTrainingsPerEpoch = maxTrainingsPerEpoch;
             ValidationPercent = validationPercent;
@@ -106,7 +108,7 @@ namespace DominionML_SQL
 
             TaskResult result = new TaskResult();
 
-            using (DominionLearner Learner = LearnerFactory.CreateDominionLearner(Card, Features, Boosts))
+            using (DominionLearner Learner = LearnerFactory.CreateDominionLearner(Card, Features, Boosts, SigmoidOutputs))
             {
                 Directory.CreateDirectory(Learner.Folder);
 
