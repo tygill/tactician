@@ -146,6 +146,8 @@ class DominionPlayer:
         self.treasure_card_count = 0
         self.deck_size = 0
         self.current_score = 0
+        self.gained_victory = False
+        self.gained_core_victory = False
         
     def set_final_score(self, score):
         self.final_score = score
@@ -296,6 +298,10 @@ class DominionPlayer:
     def gain(self, card):
         #incr_value(self.discard_pile, card)
         incr_value(self.deck, card)
+        if is_victory(card):
+            self.gained_victory = True
+            if card == 'Estate' or card == 'Duchy' or card == 'Province' or card == 'Colony':
+                self.gained_core_victory = True
         
     def trash(self, card):
         decr_value(self.deck, card)
@@ -438,6 +444,9 @@ class DominionGame:
             for i in range(3):
                 self.gain('Estate', player)
             player.reshuffle()
+            # Reset the victory gained stats after getting the original Estates
+            player.gained_victory = False
+            player.gained_core_victory = False
         # Initialize the prizes (even if Tournament isn't in play. It might be in the Black Market deck or something. No harm in setting it up.)
         for card in prize_cards:
             self.prizes[card] = 1

@@ -134,6 +134,8 @@ add_feature(lambda game, bought: game.get_player(game.possessor).get_final_score
 add_feature(lambda game, bought: game.get_player(game.possessor).get_final_score(), "Player Final Score")
 add_feature(lambda game, bought: game.get_average_final_score(), "Average Final Score")
 add_feature(lambda game, bought: 1 if game.get_player(game.possessor) is game.get_player(game.winner) else 0, "Player_Won")
+add_feature(lambda game, bought: 1 if game.get_player(game.possessor).gained_victory else 0, "Player Gained Victory Cards")
+add_feature(lambda game, bought: 1 if game.get_player(game.possessor).gained_core_victory else 0, "Player Gained Core Victory Cards")
 
 # Timestamp features
 add_feature(lambda game, bought: int(game.game_id, 16), "Game Id")
