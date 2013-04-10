@@ -354,12 +354,12 @@ namespace DominionML_SQL
                                 log.WriteLine("{0} Epoch Status", Card);
                                 log.WriteLine(" Epoch {0} completed in {1:00}:{2:00}", result.Epochs, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds);
                                 log.WriteLine(" Trained on {0} instances total", result.TotalInstancesTrained);
-                                //log.WriteLine(" SSE (training set):   {0:.000} ({1:.000})", Math.Round(trainingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(trainingSSE)), 3));
-                                //log.WriteLine(" SSE (validation set): {0:.000} ({1:.000})", Math.Round(validationSSE, 3), Math.Round(UnNormalize(Math.Sqrt(validationSSE)), 3));
-                                //log.WriteLine(" SSE (testing set):    {0:.000} ({1:.000})", Math.Round(testingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(testingSSE)), 3));
-                                //log.WriteLine(" MSE (training set):   {0:.000} ({1:.000})", Math.Round(trainingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(trainingMSE)), 3));
-                                log.WriteLine(" MSE (validation set): {0:.000} ({1:.000})", Math.Round(validationMSE, 3), Math.Round(UnNormalize(Math.Sqrt(validationMSE)), 3));
-                                //log.WriteLine(" MSE (testing set):    {0:.000} ({1:.000})", Math.Round(testingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(testingMSE)), 3));
+                                //log.WriteLine(" SSE (training set):   {0:.0000000000} ({1:.0000000000})", trainingSSE, UnNormalize(Math.Sqrt(trainingSSE)));
+                                //log.WriteLine(" SSE (validation set): {0:.0000000000} ({1:.0000000000})", validationSSE, UnNormalize(Math.Sqrt(validationSSE)));
+                                //log.WriteLine(" SSE (testing set):    {0:.0000000000} ({1:.0000000000})", testingSSE, UnNormalize(Math.Sqrt(testingSSE)));
+                                //log.WriteLine(" MSE (training set):   {0:.0000000000} ({1:.0000000000})", trainingMSE, UnNormalize(Math.Sqrt(trainingMSE)));
+                                log.WriteLine(" MSE (validation set): {0:.0000000000} ({1:.0000000000})", validationMSE, UnNormalize(Math.Sqrt(validationMSE)));
+                                //log.WriteLine(" MSE (testing set):    {0:.0000000000} ({1:.0000000000})", testingMSE, UnNormalize(Math.Sqrt(testingMSE)));
                                 log.Flush();
                                 //*/
 
@@ -367,12 +367,12 @@ namespace DominionML_SQL
                                 //Console.WriteLine("{0} Epoch Status", Card);
                                 //Console.WriteLine(" Epoch {0} completed in {1:00}:{2:00}", epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds);
                                 //Console.WriteLine(" Trained on {0} instances total", totalTrained);
-                                //Console.WriteLine(" SSE (training set):   {0:.000} ({1:.000})", Math.Round(trainingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(trainingSSE)), 3));
-                                //Console.WriteLine(" SSE (validation set): {0:.000} ({1:.000})", Math.Round(validationSSE, 3), Math.Round(UnNormalize(Math.Sqrt(validationSSE)), 3));
-                                //Console.WriteLine(" SSE (testing set):    {0:.000} ({1:.000})", Math.Round(testingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(testingSSE)), 3));
-                                //Console.WriteLine(" MSE (training set):   {0:.000} ({1:.000})", Math.Round(trainingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(trainingMSE)), 3));
-                                //Console.WriteLine(" MSE (validation set): {0:.000} ({1:.000})", Math.Round(validationMSE, 3), Math.Round(UnNormalize(Math.Sqrt(validationMSE)), 3));
-                                //Console.WriteLine(" MSE (testing set):    {0:.000} ({1:.000})", Math.Round(testingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(testingMSE)), 3));
+                                //Console.WriteLine(" SSE (training set):   {0:.0000000000} ({1:.0000000000})", trainingSSE, UnNormalize(Math.Sqrt(trainingSSE)));
+                                //Console.WriteLine(" SSE (validation set): {0:.0000000000} ({1:.0000000000})", validationSSE, UnNormalize(Math.Sqrt(validationSSE)));
+                                //Console.WriteLine(" SSE (testing set):    {0:.0000000000} ({1:.0000000000})", testingSSE, UnNormalize(Math.Sqrt(testingSSE)));
+                                //Console.WriteLine(" MSE (training set):   {0:.0000000000} ({1:.0000000000})", trainingMSE, UnNormalize(Math.Sqrt(trainingMSE)));
+                                Console.WriteLine(" MSE (validation set): {0:.0000000000} ({1:.0000000000})", validationMSE, UnNormalize(Math.Sqrt(validationMSE)));
+                                //Console.WriteLine(" MSE (testing set):    {0:.0000000000} ({1:.0000000000})", testingMSE, UnNormalize(Math.Sqrt(testingMSE)));
 
                                 //Console.WriteLine("{0}:{1} Training Accuracy (Epoch took {2:00}:{3:00}. {4} trained, {5} validated):\n  SSE: {6}\n  MSE: {7}", Card, epochsTrained, Math.Floor(epochWatch.Elapsed.TotalMinutes), epochWatch.Elapsed.Seconds, epochSize, validationEpochSize, sse, mse);
                                 //Console.WriteLine("{0}:{6} Training Accuracy:\n    SSE: {7}\n    MSE: {1}\n   RMSE: {2}\n AvgErr: {3}\n StdDev: {4}\n AvgTgt: {5}", Card, mse, Math.Sqrt(mse), errors.Average(), errors.StdDev(), targets.Average(), epochsTrained, errors.Select(x => x * x).Sum());
@@ -399,12 +399,12 @@ namespace DominionML_SQL
                                 Console.WriteLine("  {0} Trained (Mean Score Error: {1:.000} Training, {2:.000} Validation, {3:.000} Testing)", Card, Math.Round(UnNormalize(Math.Sqrt(result.TrainingMSE)), 3), Math.Round(UnNormalize(Math.Sqrt(result.ValidationMSE)), 3), Math.Round(UnNormalize(Math.Sqrt(result.TestingMSE)), 3));
                                 log.WriteLine("{0} Training Complete", Card);
                                 log.WriteLine(" Trained on {0} instances over {1} epochs", result.TotalInstancesTrained, result.Epochs);
-                                log.WriteLine(" SSE (training set):   {0:.000} ({1:.000})", Math.Round(result.TrainingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(result.TrainingSSE)), 3));
-                                log.WriteLine(" SSE (validation set): {0:.000} ({1:.000})", Math.Round(result.ValidationSSE, 3), Math.Round(UnNormalize(Math.Sqrt(result.ValidationSSE)), 3));
-                                log.WriteLine(" SSE (testing set):    {0:.000} ({1:.000})", Math.Round(result.TestingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(result.TestingSSE)), 3));
-                                log.WriteLine(" MSE (training set):   {0:.000} ({1:.000})", Math.Round(result.TrainingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(result.TrainingMSE)), 3));
-                                log.WriteLine(" MSE (validation set): {0:.000} ({1:.000})", Math.Round(result.ValidationMSE, 3), Math.Round(UnNormalize(Math.Sqrt(result.ValidationMSE)), 3));
-                                log.WriteLine(" MSE (testing set):    {0:.000} ({1:.000})", Math.Round(result.TestingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(result.TestingMSE)), 3));
+                                log.WriteLine(" SSE (training set):   {0:.0000000000} ({1:.0000000000})", result.TrainingSSE, UnNormalize(Math.Sqrt(result.TrainingSSE)));
+                                log.WriteLine(" SSE (validation set): {0:.0000000000} ({1:.0000000000})", result.ValidationSSE, UnNormalize(Math.Sqrt(result.ValidationSSE)));
+                                log.WriteLine(" SSE (testing set):    {0:.0000000000} ({1:.0000000000})", result.TestingSSE, UnNormalize(Math.Sqrt(result.TestingSSE)));
+                                log.WriteLine(" MSE (training set):   {0:.0000000000} ({1:.0000000000})", result.TrainingMSE, UnNormalize(Math.Sqrt(result.TrainingMSE)));
+                                log.WriteLine(" MSE (validation set): {0:.0000000000} ({1:.0000000000})", result.ValidationMSE, UnNormalize(Math.Sqrt(result.ValidationMSE)));
+                                log.WriteLine(" MSE (testing set):    {0:.0000000000} ({1:.0000000000})", result.TestingMSE, UnNormalize(Math.Sqrt(result.TestingMSE)));
                             }
                         }
 

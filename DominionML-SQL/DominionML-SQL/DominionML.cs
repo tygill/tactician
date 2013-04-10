@@ -194,23 +194,23 @@ namespace DominionML_SQL
                 log.WriteLine("All Training Complete! (Took {0} hours, {1} minutes, {2} seconds and trained {3} cards)", Math.Floor(watch.Elapsed.TotalHours), watch.Elapsed.Minutes, watch.Elapsed.Seconds, cards.Count);
                 log.WriteLine(" Trained a total of {0} instances over {1} epochs", finalResult.TotalInstancesTrained, finalResult.Epochs);
                 log.WriteLine(" Trained an average of {0} instances over {1} epochs", Math.Round(avgInstancesTrained), Math.Round(avgEpochs, 2));
-                log.WriteLine(" Total SSE (training sets):   {0:.000} ({1:.000})", Math.Round(finalResult.TrainingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TrainingSSE), min, max), 3));
-                log.WriteLine(" Total SSE (validation sets): {0:.000} ({1:.000})", Math.Round(finalResult.ValidationSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.ValidationSSE), min, max), 3));
-                log.WriteLine(" Total SSE (testing sets):    {0:.000} ({1:.000})", Math.Round(finalResult.TestingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TestingSSE), min, max), 3));
-                log.WriteLine(" Total MSE (training sets):   {0:.000} ({1:.000})", Math.Round(finalResult.TrainingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TrainingMSE), min, max), 3));
-                log.WriteLine(" Total MSE (validation sets): {0:.000} ({1:.000})", Math.Round(finalResult.ValidationMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.ValidationMSE), min, max), 3));
-                log.WriteLine(" Total MSE (testing sets):    {0:.000} ({1:.000})", Math.Round(finalResult.TestingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TestingMSE), min, max), 3));
+                log.WriteLine(" Total SSE (training sets):   {0:.0000000000} ({1:.0000000000})", finalResult.TrainingSSE, UnNormalize(Math.Sqrt(finalResult.TrainingSSE), min, max));
+                log.WriteLine(" Total SSE (validation sets): {0:.0000000000} ({1:.0000000000})", finalResult.ValidationSSE, UnNormalize(Math.Sqrt(finalResult.ValidationSSE), min, max));
+                log.WriteLine(" Total SSE (testing sets):    {0:.0000000000} ({1:.0000000000})", finalResult.TestingSSE, UnNormalize(Math.Sqrt(finalResult.TestingSSE), min, max));
+                log.WriteLine(" Total MSE (training sets):   {0:.0000000000} ({1:.0000000000})", finalResult.TrainingMSE, UnNormalize(Math.Sqrt(finalResult.TrainingMSE), min, max));
+                log.WriteLine(" Total MSE (validation sets): {0:.0000000000} ({1:.0000000000})", finalResult.ValidationMSE, UnNormalize(Math.Sqrt(finalResult.ValidationMSE), min, max));
+                log.WriteLine(" Total MSE (testing sets):    {0:.0000000000} ({1:.0000000000})", finalResult.TestingMSE, UnNormalize(Math.Sqrt(finalResult.TestingMSE), min, max));
             }
 
             Console.WriteLine("All Training Complete! (Took {0} hours, {1} minutes, {2} seconds and trained {3} cards)", Math.Floor(watch.Elapsed.TotalHours), watch.Elapsed.Minutes, watch.Elapsed.Seconds, cards.Count);
             Console.WriteLine(" Trained a total of {0} instances over {1} epochs", finalResult.TotalInstancesTrained, finalResult.Epochs);
             Console.WriteLine(" Trained an average of {0} instances over {1} epochs", Math.Round(avgInstancesTrained), Math.Round(avgEpochs, 2));
-            Console.WriteLine(" Total SSE (training sets):   {0:.000} ({1:.000})", Math.Round(finalResult.TrainingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TrainingSSE), min, max), 3));
-            Console.WriteLine(" Total SSE (validation sets): {0:.000} ({1:.000})", Math.Round(finalResult.ValidationSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.ValidationSSE), min, max), 3));
-            Console.WriteLine(" Total SSE (testing sets):    {0:.000} ({1:.000})", Math.Round(finalResult.TestingSSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TestingSSE), min, max), 3));
-            Console.WriteLine(" Total MSE (training sets):   {0:.000} ({1:.000})", Math.Round(finalResult.TrainingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TrainingMSE), min, max), 3));
-            Console.WriteLine(" Total MSE (validation sets): {0:.000} ({1:.000})", Math.Round(finalResult.ValidationMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.ValidationMSE), min, max), 3));
-            Console.WriteLine(" Total MSE (testing sets):    {0:.000} ({1:.000})", Math.Round(finalResult.TestingMSE, 3), Math.Round(UnNormalize(Math.Sqrt(finalResult.TestingMSE), min, max), 3));
+            Console.WriteLine(" Total SSE (training sets):   {0:.0000000000} ({1:.0000000000})", finalResult.TrainingSSE, UnNormalize(Math.Sqrt(finalResult.TrainingSSE), min, max));
+            Console.WriteLine(" Total SSE (validation sets): {0:.0000000000} ({1:.0000000000})", finalResult.ValidationSSE, UnNormalize(Math.Sqrt(finalResult.ValidationSSE), min, max));
+            Console.WriteLine(" Total SSE (testing sets):    {0:.0000000000} ({1:.0000000000})", finalResult.TestingSSE, UnNormalize(Math.Sqrt(finalResult.TestingSSE), min, max));
+            Console.WriteLine(" Total MSE (training sets):   {0:.0000000000} ({1:.0000000000})", finalResult.TrainingMSE, UnNormalize(Math.Sqrt(finalResult.TrainingMSE), min, max));
+            Console.WriteLine(" Total MSE (validation sets): {0:.0000000000} ({1:.0000000000})", finalResult.ValidationMSE, UnNormalize(Math.Sqrt(finalResult.ValidationMSE), min, max));
+            Console.WriteLine(" Total MSE (testing sets):    {0:.0000000000} ({1:.0000000000})", finalResult.TestingMSE, UnNormalize(Math.Sqrt(finalResult.TestingMSE), min, max));
         }
 
         public static double UnNormalize(double value, double min, double max)
