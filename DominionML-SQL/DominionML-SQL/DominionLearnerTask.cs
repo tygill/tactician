@@ -300,7 +300,7 @@ namespace DominionML_SQL
                                         //log.WriteLine(" Prediction: {0,3} Expected {1,3} Error {2,3}", Math.Round(UnNormalize(prediction)), Math.Round(UnNormalize(target)), Math.Round(UnNormalize(target) - UnNormalize(prediction)));
                                     }
                                 }
-                                double mse = sse / result.ValidationInstances;
+                                double mse = sse / validationsPerEpoch;
 
 
                                 // Check for termination
