@@ -23,7 +23,7 @@ namespace DominionML_SQL
             uint? maxValidations = args.Contains("-mv") ? (uint?)uint.Parse(args[argList.IndexOf("-mv") + 1]) : null;
             bool recalculateOutputMinMax = args.Contains("-no");;
             bool boost = !args.Contains("-nb");
-            string limitCard = args.Contains("-c") ? args[argList.IndexOf("-c") + 1] : null;
+            string limitCard = args.Contains("-c") ? args[argList.IndexOf("-c") + 1] : (args.Contains("-a") ? "All" : null);
             string outputFeature = args.Contains("-o") ? args[argList.IndexOf("-o") + 1] : "player_final_score";
             uint epochWindow = args.Contains("-e") ? uint.Parse(args[argList.IndexOf("-e") + 1]) : 20;
             bool sigmoidOutputs = args.Contains("-s");
@@ -40,6 +40,7 @@ namespace DominionML_SQL
                               "                       (spaces should be replaced with underscores,\n" +
                               "                       apostrophes should be left out.)\n" +
                               "                       (if 'Random', then a random card is picked)");
+            Console.WriteLine(" -a                    Train using all cards (no filtering on card_bought)\n");
             Console.WriteLine(" -s                    Use a sigmoid output, rather than continuous\n");
             Console.WriteLine(" -o <feature>          Use the given output feature\n" +
                               "                       (default is player_final_score)");
@@ -109,24 +110,24 @@ namespace DominionML_SQL
                 features = columns.Where(IsFeatureColumn).ToList();
 
                 // Get the list of cards that should be trained
-                cards = GetCards(conn);
                 if (!string.IsNullOrWhiteSpace(limitCard))
                 {
                     if (limitCard.Equals("Random", StringComparison.OrdinalIgnoreCase))
                     {
                         Random rand = new Random();
-                        cards = cards.OrderBy(card => rand.Next()).Take(1).ToList();
+                        cards = GetCards(conn).OrderBy(card => rand.Next()).Take(1).ToList();
                     }
                     else
                     {
-                        cards = cards.Where(card => card.Equals(limitCard, StringComparison.OrdinalIgnoreCase)).ToList();
+                        cards = new List<string>();
+                        cards.Add(limitCard);
                     }
                 }
                 else
                 {
                     // Sort the cards so that the basic cards (which have more instances) are run first.
                     // This prevents them from lingering on after everything else has finished.
-                    cards = cards.OrderBy(card =>
+                    cards = GetCards(conn).OrderBy(card =>
                     {
                         if (card == "Estate" || card == "Duchy" || card == "Province" || card == "Colony" ||
                             card == "Copper" || card == "Silver" || card == "Gold" || card == "Platinum" ||

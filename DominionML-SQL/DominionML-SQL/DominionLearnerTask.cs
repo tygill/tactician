@@ -40,7 +40,9 @@ namespace DominionML_SQL
             EpochWinow = epochWindow;
             NormalizationMin = min;
             NormalizationMax = max;
+            Features = features;
             // Prune out some features that we don't want to use
+            /*
             Features = features
                 .Where(name =>
                     !name.Contains("_in_supply") || name.Contains("_cards_in_supply"))
@@ -53,6 +55,7 @@ namespace DominionML_SQL
                                 ? Dominion.GetCard(Card).Plural.Replace("'", "").Replace(' ', '_').ToLowerInvariant()
                                 : "none"))
                 .ToList();
+            //*/
             DatabaseFile = dbFile;
 
             // How likely is a particular card in a given game? This will be used to boost features that are only in a specific game.
@@ -122,6 +125,7 @@ namespace DominionML_SQL
 
                         // Create an in-memory database to load data from
                         log.WriteLine("{0}: Creating in-memory database", Card);
+                        log.Flush();
                         // Attach and extract the data from the source database
                         sql = @"ATTACH @db AS `source_db`;";
                         using (SQLiteCommand command = new SQLiteCommand(sql, conn))
@@ -131,11 +135,15 @@ namespace DominionML_SQL
                         }
 
                         log.WriteLine("{0}: Copying data...", Card);
+                        log.Flush();
                         //sql = String.Format(@"CREATE TABLE `main`.`instances` AS SELECT `{0}`,`card_bought`, `player_final_score`, `use`, `randomizer` FROM `source_db`.`instances` WHERE `source_db`.`instances`.`card_bought` = @card_bought;", string.Join("`, `", Features));
-                        sql = String.Format(@"CREATE TABLE `main`.`instances` AS SELECT `{0}`,`card_bought`, `{1}`, `game_second` FROM `source_db`.`instances` WHERE `source_db`.`instances`.`card_bought` = @card_bought;", string.Join("`, `", Features), OutputFeature);
+                        sql = String.Format(@"CREATE TABLE `main`.`instances` AS SELECT `{0}`,`card_bought`, `{1}`, `game_second` FROM `source_db`.`instances`{2};", string.Join("`, `", Features), OutputFeature, Card != "All" ? " WHERE `source_db`.`instances`.`card_bought` = @card_bought" : "");
                         using (SQLiteCommand command = new SQLiteCommand(sql, conn))
                         {
-                            command.Parameters.AddWithValue("@card_bought", Card);
+                            if (Card != "All")
+                            {
+                                command.Parameters.AddWithValue("@card_bought", Card);
+                            }
                             command.ExecuteNonQuery();
                         }
                         sql = @"DETACH `source_db`;";
@@ -144,6 +152,7 @@ namespace DominionML_SQL
                             command.ExecuteNonQuery();
                         }
                         log.WriteLine("{0}: Creating index...", Card);
+                        log.Flush();
                         //sql = @"CREATE INDEX `main`.`use_index` ON `instances` (`use`);";
                         sql = @"CREATE INDEX `main`.`game_second_index` ON `instances` (`game_second`);";
                         using (SQLiteCommand command = new SQLiteCommand(sql, conn))
@@ -151,6 +160,7 @@ namespace DominionML_SQL
                             command.ExecuteNonQuery();
                         }
                         log.WriteLine("{0}: Creation of in-memory database complete", Card);
+                        log.Flush();
 
 
                         // Get the total number of instances we have available
@@ -186,6 +196,7 @@ namespace DominionML_SQL
                         result.ValidationInstances = result.ValidationInstances;
                         result.TestingInstances = result.TestingInstances;
                         log.WriteLine("{0}: {1} Instances ({2} training, {3} validation, {4} testing)", Card, result.TotalInstances, result.TrainingInstances, result.ValidationInstances, result.TestingInstances);
+                        log.Flush();
 
                         if (Boost)
                         {
@@ -193,6 +204,7 @@ namespace DominionML_SQL
                         }
 
                         log.WriteLine("Using {0} as the target/output feature", OutputFeature);
+                        log.Flush();
 
 
                         // Epoch status
