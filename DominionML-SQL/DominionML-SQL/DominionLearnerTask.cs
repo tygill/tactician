@@ -402,10 +402,13 @@ namespace DominionML_SQL
                                 // Test the predictive accuracy on the each data set
                                 result.TrainingSSE = CalculateSSE(trainingCommand, Learner, instance);
                                 result.TrainingMSE = result.TrainingSSE / result.TrainingInstances;
+                                double trainingAccuracy = CalculatePredictionAccuracy(trainingCommand, Learner, instance);
                                 result.ValidationSSE = CalculateSSE(validationCommand, Learner, instance);
                                 result.ValidationMSE = result.ValidationSSE / result.ValidationInstances;
+                                double validationAccuracy = CalculatePredictionAccuracy(validationCommand, Learner, instance);
                                 result.TestingSSE = CalculateSSE(testingCommand, Learner, instance);
                                 result.TestingMSE = result.TestingSSE / result.TestingInstances;
+                                double testingAccuracy = CalculatePredictionAccuracy(testingCommand, Learner, instance);
 
                                 //Console.WriteLine("{0} Training Complete\n Trained on {1} instances over {2} epochs", Card, totalTrained, epochsTrained);
                                 Console.WriteLine("  {0} Trained (MSE: {1:.000} Training, {2:.000} Validation, {3:.000} Testing)", Card, Math.Round(result.TrainingMSE, 3), Math.Round(result.ValidationMSE, 3), Math.Round(result.TestingMSE, 3));
@@ -418,6 +421,9 @@ namespace DominionML_SQL
                                 log.WriteLine(" MSE (training set):   {0:.0000000000} ({1:.0000000000})", result.TrainingMSE, UnNormalize(Math.Sqrt(result.TrainingMSE)));
                                 log.WriteLine(" MSE (validation set): {0:.0000000000} ({1:.0000000000})", result.ValidationMSE, UnNormalize(Math.Sqrt(result.ValidationMSE)));
                                 log.WriteLine(" MSE (testing set):    {0:.0000000000} ({1:.0000000000})", result.TestingMSE, UnNormalize(Math.Sqrt(result.TestingMSE)));
+                                log.WriteLine(" PA (training set):   {0:.000}", Math.Round(trainingAccuracy, 3));
+                                log.WriteLine(" PA (validation set): {0:.000})", Math.Round(validationAccuracy, 3));
+                                log.WriteLine(" PA (testing set):    {0:.000})", Math.Round(testingAccuracy, 3));
                             }
                         }
                     }
@@ -468,5 +474,39 @@ namespace DominionML_SQL
                 return sse;
             }
         }
+
+        public double CalculatePredictionAccuracy(SQLiteCommand command, DominionLearner learner, double[] instance)
+        {
+            using (SQLiteDataReader reader = command.ExecuteReader())
+            {
+                int sum = 0;
+                int count = 0;
+                while (reader.Read())
+                {
+                    for (int i = 0; i < Features.Count; i++)
+                    {
+                        instance[i] = reader.GetDouble(i);
+                    }
+                    // The target output is the last column in the row
+                    double prediction = learner.Predict(instance);
+                    if(prediction > .5)
+                    {
+                        prediction = 1;
+                    }
+                    else
+                    {
+                        prediction = 0;
+                    }
+                    double target = Normalize(reader.GetDouble(Features.Count));
+                    if (prediction == target)
+                    {
+                        sum++;
+                    }
+                    count++;
+                }
+                return (double)sum/count;
+            }
+        }
+
     }
 }
