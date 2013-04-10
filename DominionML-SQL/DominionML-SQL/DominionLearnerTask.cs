@@ -42,7 +42,8 @@ namespace DominionML_SQL
             MaxEpochs = maxEpochs;
             NormalizationMin = min;
             NormalizationMax = max;
-            Features = features;
+            // Remove the three ratio features, as they are closely correlated with the regular card type counts?
+            Features = features;//.Where(name => !name.Contains("_ratio")).ToList();
             // Prune out some features that we don't want to use
             /*
             Features = features
@@ -385,6 +386,17 @@ namespace DominionML_SQL
                             validationReader.Dispose();
                             validationReader = null;
 
+                            currentErrorWindow.Clear();
+                            currentErrorWindow = null;
+                            previousErrorWindow.Clear();
+                            previousErrorWindow = null;
+                        }
+
+                        sql = string.Format(@"SELECT `{0}`, `{1}` FROM `instances` WHERE {{0}};", string.Join("`, `", Features), OutputFeature);
+                        using (SQLiteCommand trainingCommand = new SQLiteCommand(string.Format(sql, "`game_second` >= @validationCutoff AND `game_second` < @trainingCutoff"), conn))
+                        using (SQLiteCommand validationCommand = new SQLiteCommand(string.Format(sql, "`game_second` < @validationCutoff"), conn))
+                        using (SQLiteCommand testingCommand = new SQLiteCommand(string.Format(sql, "`game_second` >= @trainingCutoff"), conn))
+                        {
                             // Report all the errors
                             {
                                 // Test the predictive accuracy on the each data set
@@ -408,11 +420,6 @@ namespace DominionML_SQL
                                 log.WriteLine(" MSE (testing set):    {0:.0000000000} ({1:.0000000000})", result.TestingMSE, UnNormalize(Math.Sqrt(result.TestingMSE)));
                             }
                         }
-
-                        currentErrorWindow.Clear();
-                        currentErrorWindow = null;
-                        previousErrorWindow.Clear();
-                        previousErrorWindow = null;
                     }
 
                     using (StreamWriter file = new StreamWriter(String.Format("{0}\\{1}.json", Learner.Folder, Card), false))
