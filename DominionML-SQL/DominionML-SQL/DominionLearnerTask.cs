@@ -392,11 +392,17 @@ namespace DominionML_SQL
                             previousErrorWindow = null;
                         }
 
-                        sql = string.Format(@"SELECT `{0}`, `{1}` FROM `instances` {{0}};", string.Join("`, `", Features), OutputFeature);
+                        sql = string.Format(@"SELECT `{0}`, `{1}` FROM `instances` WHERE {{0}};", string.Join("`, `", Features), OutputFeature);
                         using (SQLiteCommand trainingCommand = new SQLiteCommand(string.Format(sql, "`game_second` >= @validationCutoff AND `game_second` < @trainingCutoff"), conn))
                         using (SQLiteCommand validationCommand = new SQLiteCommand(string.Format(sql, "`game_second` < @validationCutoff"), conn))
                         using (SQLiteCommand testingCommand = new SQLiteCommand(string.Format(sql, "`game_second` >= @trainingCutoff"), conn))
                         {
+                            // Setup parameters
+                            trainingCommand.Parameters.AddWithValue("@trainingCutoff", trainingCutoff);
+                            trainingCommand.Parameters.AddWithValue("@validationCutoff", validationCutoff);
+                            validationCommand.Parameters.AddWithValue("@validationCutoff", validationCutoff);
+                            testingCommand.Parameters.AddWithValue("@trainingCutoff", trainingCutoff);
+
                             // Report all the errors
                             {
                                 // Test the predictive accuracy on the each data set
