@@ -223,7 +223,7 @@ namespace DominionML_SQL
 
         // These are the hard coded, known non-feature column names.
         // If other features should be excluded, they can be added to this list.
-        private static string[] nonFeatureColumns = { "id", "card_bought", "card_output_weight", "player_current_score", "player_score_increase", "player_final_score", "average_final_score", "player_won", "randomizer", "use", "game_id", "game_year", "game_month", "game_day", "game_hour", "game_minute", "game_second" };
+        private static string[] nonFeatureColumns = { "id", "card_bought", "card_output_weight", "player_current_score", "player_score_increase", "player_final_score", "average_final_score", "player_won", "player_gained_victory_cards", "player_gained_core_victory_cards", "randomizer", "use", "game_id", "game_year", "game_month", "game_day", "game_hour", "game_minute", "game_second" };
         public static bool IsFeatureColumn(string column)
         {
             return !nonFeatureColumns.Contains(column);
