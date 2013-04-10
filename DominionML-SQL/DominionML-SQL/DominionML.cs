@@ -26,6 +26,7 @@ namespace DominionML_SQL
             string limitCard = args.Contains("-c") ? args[argList.IndexOf("-c") + 1] : (args.Contains("-a") ? "All" : null);
             string outputFeature = args.Contains("-o") ? args[argList.IndexOf("-o") + 1] : "player_final_score";
             uint epochWindow = args.Contains("-e") ? uint.Parse(args[argList.IndexOf("-e") + 1]) : 20;
+            uint maxEpochs = args.Contains("-me") ? uint.Parse(args[argList.IndexOf("-me") + 1]) : uint.MaxValue;
             bool sigmoidOutputs = args.Contains("-s");
             double min = args.Contains("-nmin") ? double.Parse(args[argList.IndexOf("-nmin") + 1]) : 0.0;
             double max = args.Contains("-nmax") ? double.Parse(args[argList.IndexOf("-nmax") + 1]) : 0.0;
@@ -53,6 +54,7 @@ namespace DominionML_SQL
                               "                       (default is however many are in the training set)");
             Console.WriteLine(" -e <window=20>        Number of previous epochs to consider in the\n" +
                               "                       stopping window");
+            Console.WriteLine(" -me <epochs=MaxInt>   Number of epochs to cap training with");
             Console.WriteLine(" -no                   Recalculate the normalization min/max of the output\n" +
                               "                       (otherwise, the precomputed values are used)");
             Console.WriteLine(" -nmin <min>           Use the given output normalization min");
@@ -148,7 +150,7 @@ namespace DominionML_SQL
             Task<TaskResult>[] tasks = new Task<TaskResult>[cards.Count];
             for (int i = 0; i < cards.Count; i++)
             {
-                learnerTasks[i] = new DominionLearnerTask(cards[i], features, outputFeature, file, trainingPercent, validationPercent, min, max, boost, sigmoidOutputs, maxTrainings, maxValidations, epochWindow);
+                learnerTasks[i] = new DominionLearnerTask(cards[i], features, outputFeature, file, trainingPercent, validationPercent, min, max, boost, sigmoidOutputs, maxTrainings, maxValidations, epochWindow, maxEpochs);
                 tasks[i] = new Task<TaskResult>(learnerTasks[i].RunTask);
             }
 

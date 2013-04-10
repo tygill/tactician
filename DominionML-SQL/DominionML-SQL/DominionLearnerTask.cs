@@ -24,11 +24,12 @@ namespace DominionML_SQL
         public double ValidationPercent { get; private set; }
         public uint? MaxValidationsPerEpoch { get; private set; }
         public uint EpochWinow { get; private set; }
+        public uint MaxEpochs { get; private set; }
         public double NormalizationMin { get; private set; }
         public double NormalizationMax { get; private set; }
         private string DatabaseFile;
 
-        public DominionLearnerTask(string card, IList<string> features, string outputFeature, string dbFile, double trainingPercent, double validationPercent, double min, double max, bool boost, bool sigmoidOutputs, uint? maxTrainingsPerEpoch = null, uint? maxValidationsPerEpoch = null, uint epochWindow = 20)
+        public DominionLearnerTask(string card, IList<string> features, string outputFeature, string dbFile, double trainingPercent, double validationPercent, double min, double max, bool boost, bool sigmoidOutputs, uint? maxTrainingsPerEpoch = null, uint? maxValidationsPerEpoch = null, uint epochWindow = 20, uint maxEpochs = uint.MaxValue)
         {
             Card = card;
             OutputFeature = outputFeature;
@@ -38,6 +39,7 @@ namespace DominionML_SQL
             ValidationPercent = validationPercent;
             MaxValidationsPerEpoch = maxValidationsPerEpoch;
             EpochWinow = epochWindow;
+            MaxEpochs = maxEpochs;
             NormalizationMin = min;
             NormalizationMax = max;
             Features = features;
@@ -211,7 +213,6 @@ namespace DominionML_SQL
                         uint trainingsPerEpoch = MaxTrainingsPerEpoch.HasValue ? MaxTrainingsPerEpoch.Value : result.TrainingInstances; // Math.Min(trainingInstances, 500);
                         uint validationsPerEpoch = MaxValidationsPerEpoch.HasValue ? MaxValidationsPerEpoch.Value : result.ValidationInstances; // Math.Min(validationInstances, 200);
                         result.Epochs = 0;
-                        int maxEpochs = int.MaxValue;
 
                         // Termination criteria
                         Queue<double> currentErrorWindow = new Queue<double>((int)EpochWinow + 1); // The +1 is so that we can enqueue, check if the size is greater, and then dequeue it rather than checking before enqueuing a new error
@@ -328,7 +329,7 @@ namespace DominionML_SQL
                                     done = true;
                                 }
 
-                                if (result.Epochs >= maxEpochs)
+                                if (result.Epochs >= MaxEpochs)
                                 {
                                     done = true;
                                 }
